@@ -1,0 +1,33 @@
+id: newsletter
+namespace: company.team
+
+inputs:
+  - id: email
+    type: EMAIL
+    displayName: Your email address
+    defaults: test@kestra.io
+
+  - id: reason
+    type: SELECT
+    displayName: What do you orchestrate with Kestra?
+    values:
+      - Data pipelines
+      - Infrastructure provisioning
+      - Microservices
+      - Python workflows
+      - dbt Workflows
+      - Manual Approval Workflows
+
+  - id: accept_tos
+    type: BOOL
+    defaults: true
+    displayName: I agree to receive emails from Kestra.
+    description: |
+      By clicking Submit, you agree to Kestra storing and processing the personal information provided above to deliver the requested content.
+
+tasks:
+  - id: save_in_db
+    type: io.kestra.plugin.core.http.Request
+    uri: https://kestra.io/api/mock
+    method: POST
+    body: "{{ inputs }}"

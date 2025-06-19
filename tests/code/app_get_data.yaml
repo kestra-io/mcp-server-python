@@ -1,0 +1,62 @@
+id: app_get_data
+type: io.kestra.plugin.ee.apps.Execution
+displayName: Form to request and download data
+namespace: company.team
+flowId: get_data
+access: 
+  type: PRIVATE
+tags:
+  - Reporting
+  - Analytics
+
+layout:
+  - on: OPEN
+    blocks:
+      - type: io.kestra.plugin.ee.apps.core.blocks.Markdown
+        content: |
+          ## Request data
+          Select the dataset you want to download.
+      - type: io.kestra.plugin.ee.apps.execution.blocks.CreateExecutionForm
+      - type: io.kestra.plugin.ee.apps.execution.blocks.CreateExecutionButton
+        text: Submit
+
+  - on: RUNNING
+    blocks:
+      - type: io.kestra.plugin.ee.apps.core.blocks.Markdown
+        content: |
+          ## Fetching your data...
+          Don't close this window. The results will be displayed as soon as the processing is complete.
+      
+      - type: io.kestra.plugin.ee.apps.core.blocks.Loading
+      - type: io.kestra.plugin.ee.apps.execution.blocks.Logs
+      - type: io.kestra.plugin.ee.apps.execution.blocks.CancelExecutionButton
+        text: Cancel request
+
+  - on: SUCCESS
+    blocks:
+      - type: io.kestra.plugin.ee.apps.core.blocks.Markdown
+        content: |
+          ## Request processed successfully
+          You requested the following dataset:
+
+      - type: io.kestra.plugin.ee.apps.execution.blocks.Inputs
+
+      - type: io.kestra.plugin.ee.apps.core.blocks.Alert
+        style: SUCCESS
+        showIcon: true
+        content: Your data is ready for download!
+
+      - type: io.kestra.plugin.ee.apps.execution.blocks.Outputs
+
+      - type: io.kestra.plugin.ee.apps.core.blocks.Markdown
+        content: Find more App examples in the linked repository
+
+      - type: io.kestra.plugin.ee.apps.core.blocks.Button
+        text: App examples
+        url: https://github.com/kestra-io/enterprise-edition-examples/tree/main/apps
+        style: INFO
+
+      - type: io.kestra.plugin.ee.apps.core.blocks.Button
+        text: Submit new request
+        url: "{{ app.url }}"
+        style: DEFAULT

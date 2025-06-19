@@ -1,0 +1,28 @@
+id: get_data
+namespace: company.team
+
+inputs:
+  - id: data
+    displayName: Select Data to Download
+    type: SELECT
+    values: [customers, employees, products, stores, suppliers]
+    defaults: customers
+
+  - id: startDate
+    displayName: Start Date for your dataset
+    type: DATE
+    defaults: 2025-12-03
+
+tasks:
+  - id: extract
+    type: io.kestra.plugin.core.http.Download
+    uri: https://huggingface.co/datasets/kestra/datasets/resolve/main/ion/{{ inputs.data }}.ion
+  
+  - id: log
+    type: io.kestra.plugin.core.log.Log
+    message: Hello from MCP test
+
+outputs:
+  - id: data
+    type: FILE
+    value: "{{ outputs.extract.uri }}"

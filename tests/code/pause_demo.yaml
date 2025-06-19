@@ -1,0 +1,14 @@
+id: pause_demo
+namespace: company.team
+
+tasks:
+  - id: hi
+    type: io.kestra.plugin.core.log.Log
+    message: Hello World!
+
+  - id: pause
+    type: io.kestra.plugin.core.flow.Pause
+
+  - id: welcome_back
+    type: io.kestra.plugin.core.log.Log
+    message: Welcome back!

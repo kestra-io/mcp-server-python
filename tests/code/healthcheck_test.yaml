@@ -1,0 +1,24 @@
+id: test_healthcheck
+flowId: healthcheck
+namespace: tutorial
+testCases:
+  - id: server_should_be_reachable
+    type: io.kestra.core.tests.flow.UnitTest
+    fixtures:
+      inputs:
+        server_uri: https://kestra.io
+    assertions:
+      - value: "{{outputs.http_request.code}}"
+        equalTo: 200
+
+  - id: server_should_be_unreachable
+    type: io.kestra.core.tests.flow.UnitTest
+    fixtures:
+      inputs:
+        server_uri: https://kestra.io/bad-url
+      tasks:
+        - id: server_unreachable_alert
+          description: no Slack message from tests
+    assertions:
+      - value: "{{outputs.http_request.code}}"
+        notEqualTo: 200

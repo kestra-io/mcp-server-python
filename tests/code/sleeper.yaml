@@ -1,0 +1,17 @@
+id: sleeper
+namespace: company.team
+
+tasks:
+  - id: subflow
+    type: io.kestra.plugin.core.flow.Subflow
+    namespace: company.team
+    flowId: hello_mcp
+    wait: false
+
+  - id: sleep
+    type: io.kestra.plugin.core.flow.Sleep
+    duration: PT5M
+
+  - id: wake_up
+    type: io.kestra.plugin.core.log.Log
+    message: Wake up!

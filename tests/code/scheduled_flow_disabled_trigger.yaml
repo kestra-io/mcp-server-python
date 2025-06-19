@@ -1,0 +1,18 @@
+id: scheduled_flow  
+namespace: company.team
+
+tasks:
+  - id: label
+    type: io.kestra.plugin.core.execution.Labels
+    labels:
+      scheduledDate: "{{trigger.date ?? execution.startDate}}"
+  
+  - id: external_system_export
+    type: io.kestra.plugin.core.log.Log
+    message: processing data for {{trigger.date ?? execution.startDate}}
+
+triggers:  
+  - id: schedule  
+    type: io.kestra.plugin.core.trigger.Schedule  
+    cron: "@hourly"
+    disabled: true

@@ -1,0 +1,27 @@
+id: approval
+namespace: company.team
+
+inputs:
+  - id: request
+    type: STRING
+    defaults: John Doe requests PTO for last 2 weeks of July 2025
+
+tasks:
+  - id: waitForApproval
+    type: io.kestra.plugin.core.flow.Pause
+    onResume:        
+      - id: reason
+        description: Reason for approval or rejection?
+        type: STRING
+        defaults: Approved
+
+  - id: approve
+    type: io.kestra.plugin.core.http.Request
+    uri: https://kestra.io/api/mock
+    method: POST
+    contentType: application/json
+    body: "{{ outputs.waitForApproval.onResume }}"
+
+  - id: log
+    type: io.kestra.plugin.core.log.Log
+    message: Status is {{ outputs.waitForApproval.onResume.reason }}

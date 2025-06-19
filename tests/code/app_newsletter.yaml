@@ -1,0 +1,34 @@
+id: app_newsletter
+type: io.kestra.plugin.ee.apps.Execution
+displayName: Form to sign up for Kestra newsletter
+namespace: company.team
+flowId: newsletter
+access: 
+  type: PRIVATE
+tags:
+  - Newsletter
+  - Marketing
+
+layout:
+  - on: OPEN
+    blocks:
+      - type: io.kestra.plugin.ee.apps.core.blocks.Markdown
+        content: |
+          ## Sign up for Kestra newsletter
+          Register now to be the first to know when we launch new products and releases
+
+      - type: io.kestra.plugin.ee.apps.execution.blocks.CreateExecutionForm
+      - type: io.kestra.plugin.ee.apps.execution.blocks.CreateExecutionButton
+        text: Submit
+
+  - on: CREATED
+    blocks:
+      - type: io.kestra.plugin.ee.apps.core.blocks.Markdown
+        content: |
+          ### Thanks for registering!
+          We typically send updates once every 2 months.
+
+      - type: io.kestra.plugin.ee.apps.core.blocks.Button
+        text: Submit new request
+        url: "{{ app.url }}"
+        style: DEFAULT

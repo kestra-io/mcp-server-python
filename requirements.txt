@@ -1,0 +1,17 @@
+httpx
+pyyaml
+python-dotenv
+fastmcp
+pydantic
+
+# for running tests locally, install pytest:
+# pytest
+
+# for CodeGen tool, uncomment the ones below:
+# google-genai
+# tenacity
+# pandas
+
+# for running agents using Kestra MCP server, uncomment packages below: 
+# openai-agents
+# google-adk

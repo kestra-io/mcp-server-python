@@ -1,0 +1,22 @@
+{
+    "products": [
+      {
+        "id": 1,
+        "title": "Essence Mascara Lash Princess",
+        "category": "beauty",
+        "price": 9.99,
+        "discountPercentage": 10.48,
+        "brand": "Essence",
+        "sku": "BEA-ESS-ESS-001"
+      },
+      {
+        "id": 2,
+        "title": "Eyeshadow Palette with Mirror",
+        "category": "beauty",
+        "price": 19.99,
+        "discountPercentage": 18.19,
+        "brand": "Glamour Beauty",
+        "sku": "BEA-GLA-EYE-002"
+      }
+    ]
+  }  

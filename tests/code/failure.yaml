@@ -1,0 +1,14 @@
+id: failure
+namespace: company.team
+
+tasks:
+  - id: start
+    type: io.kestra.plugin.core.log.Log
+    message: Hello World!
+
+  - id: fail
+    type: io.kestra.plugin.core.execution.Fail
+
+  - id: run_after_restart
+    type: io.kestra.plugin.core.log.Log
+    message: Hello after restart!

@@ -1,0 +1,56 @@
+id: mcp_prompt_form
+type: io.kestra.plugin.ee.apps.Execution
+displayName: Form to prompt Kestra
+namespace: company.team
+flowId: ask_mcp
+access: 
+  type: PRIVATE
+tags:
+  - AI
+
+layout:
+  - on: OPEN
+    blocks:
+      - type: io.kestra.plugin.ee.apps.core.blocks.Markdown
+        content: |
+          ## Request data
+          What would you like to do in Kestra?
+      - type: io.kestra.plugin.ee.apps.execution.blocks.CreateExecutionForm
+      - type: io.kestra.plugin.ee.apps.execution.blocks.CreateExecutionButton
+        text: Submit
+
+  - on: RUNNING
+    blocks:
+      - type: io.kestra.plugin.ee.apps.core.blocks.Markdown
+        content: |
+          ## Making request
+          Don't close this window. The results will be displayed as soon as processing is complete.
+      
+      - type: io.kestra.plugin.ee.apps.core.blocks.Loading
+      - type: io.kestra.plugin.ee.apps.execution.blocks.CancelExecutionButton
+        text: Cancel request
+
+  - on: SUCCESS
+    blocks:
+      - type: io.kestra.plugin.ee.apps.core.blocks.Markdown
+        content: |
+          ## Request processed successfully
+          Your prompt was:
+
+      - type: io.kestra.plugin.ee.apps.execution.blocks.Inputs
+
+      - type: io.kestra.plugin.ee.apps.core.blocks.Alert
+        style: SUCCESS
+        showIcon: true
+        content: Here's the response!
+
+      - type: io.kestra.plugin.ee.apps.execution.blocks.TaskOutputs
+        outputs:
+          - displayName: "Response"
+            type: FILE
+            value: "{{ outputs.run_mcp_server.outputFiles['output.md'] }}"
+
+      - type: io.kestra.plugin.ee.apps.core.blocks.Button
+        text: Submit new request
+        url: "{{ app.url }}"
+        style: DEFAULT

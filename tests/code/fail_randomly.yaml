@@ -1,0 +1,21 @@
+id: fail_randomly
+namespace: company.team
+
+tasks:
+  - id: nr
+    type: io.kestra.plugin.core.debug.Return
+    format: "{{ randomInt(lower=0, upper=2) }}"
+
+  - id: label
+    type: io.kestra.plugin.core.execution.Labels
+    labels:
+      nr: "{{ outputs.nr.value }}"
+
+  - id: log_data
+    type: io.kestra.plugin.core.log.Log
+    message: Hello there {{ outputs.nr.value }}
+
+  - id: fail
+    type: io.kestra.plugin.core.execution.Fail
+    runIf: "{{ outputs.nr.value | number('INT') == 1 }}"
+    errorMessage: Bad value returned!
