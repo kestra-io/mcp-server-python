@@ -27,7 +27,7 @@ Paste the following configuration into your MCP settings (e.g., Cursor, Claude, 
         "-e", "GOOGLE_GEMINI_MODEL_CODEGEN",
         "-e", "GOOGLE_API_KEY",
         "-e", "HELICONE_API_KEY",
-        "ghcr.io/kestra-io/kestra-mcp-python:latest"
+        "ghcr.io/kestra-io/mcp-server-python:latest"
       ],
       "env": {
         "KESTRA_BASE_URL": "http://host.docker.internal:8080/api/v1",

@@ -5,13 +5,13 @@ fastmcp
 pydantic
 
 # for running tests locally, install pytest:
-# pytest
+pytest
 
 # for CodeGen tool, uncomment the ones below:
-# google-genai
-# tenacity
-# pandas
+google-genai
+tenacity
+pandas
 
 # for running agents using Kestra MCP server, uncomment packages below: 
-# openai-agents
-# google-adk
+openai-agents
+google-adk
