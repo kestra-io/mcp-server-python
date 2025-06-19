@@ -17,6 +17,8 @@ Paste the following configuration into your MCP settings (e.g., Cursor, Claude, 
         "run",
         "-i",
         "--rm",
+        "--pull",
+        "always",
         "-e", "KESTRA_BASE_URL",
         "-e", "KESTRA_TENANT_ID",
         "-e", "KESTRA_MCP_DISABLED_TOOLS",
@@ -26,6 +28,43 @@ Paste the following configuration into your MCP settings (e.g., Cursor, Claude, 
         "KESTRA_BASE_URL": "http://host.docker.internal:8080/api/v1",
         "KESTRA_TENANT_ID": "main",
         "KESTRA_MCP_DISABLED_TOOLS": "ee,codegen"
+      }
+    }
+  }
+}
+```
+
+If you enabled Basic Auth, use:
+
+```json
+{
+  "mcpServers": {
+    "kestra": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--pull",
+        "always",
+        "-e",
+        "KESTRA_MCP_DISABLED_TOOLS",
+        "-e",
+        "KESTRA_BASE_URL",
+        "-e",
+        "KESTRA_TENANT_ID",
+        "-e",
+        "KESTRA_USERNAME",
+        "-e",
+        "KESTRA_PASSWORD",
+        "ghcr.io/kestra-io/mcp-server-python:latest"
+      ],
+      "env": {
+        "KESTRA_BASE_URL": "http://host.docker.internal:8080/api/v1",
+        "KESTRA_TENANT_ID": "main",
+        "KESTRA_MCP_DISABLED_TOOLS": "ee,codegen",
+        "KESTRA_USERNAME": "admin@kestra.io",
+        "KESTRA_PASSWORD": "your_password"
       }
     }
   }
@@ -43,6 +82,8 @@ Paste the following configuration into your MCP settings (e.g., Cursor, Claude, 
         "run",
         "-i",
         "--rm",
+        "--pull",
+        "always",
         "-e", "KESTRA_BASE_URL",
         "-e", "KESTRA_API_TOKEN",
         "-e", "KESTRA_TENANT_ID",
@@ -71,6 +112,8 @@ Paste the following configuration into your MCP settings (e.g., Cursor, Claude, 
         "run",
         "-i",
         "--rm",
+        "--pull",
+        "always",
         "-e", "KESTRA_BASE_URL",
         "-e", "KESTRA_API_TOKEN",
         "-e", "KESTRA_TENANT_ID",
@@ -106,8 +149,6 @@ Paste the following configuration into your MCP settings (e.g., Cursor, Claude, 
 - To disable Enterprise Edition tools in OSS, set `KESTRA_MCP_DISABLED_TOOLS=ee`.
 - The `host.docker.internal` hostname allows the Docker container to access services running on your host machine (such as the Kestra API server on port 8080). This works on macOS and Windows. On Linux, you may need to use the host network mode or set up a custom bridge.
 - The `-e` flags pass environment variables from your MCP configuration into the Docker container. 
-
-
 
 ---
 
@@ -174,7 +215,7 @@ Then, replace the `--directory` by the path where you cloned the Kestra MCP Serv
       "command": "/Users/annageller/.local/bin/uv",
       "args": [
         "--directory",
-        "/Users/annageller/gh/mcp-kestra-python/src",
+        "/Users/annageller/gh/mcp-server-python/src",
         "run",
         "server.py"
       ]
@@ -196,7 +237,7 @@ In your VS Code project directory, add a folder `.vscode` and within that folder
       "command": "/Users/annageller/.local/bin/uv",
       "args": [
         "--directory",
-        "/Users/annageller/gh/mcp-kestra-python/src",
+        "/Users/annageller/gh/mcp-server-python/src",
         "run",
         "server.py"
       ]
@@ -225,7 +266,7 @@ No, you don't have to run the server manually, as when using the `stdio` transpo
 
 **Question: Do I have to manually activate the virtual environment for the MCP Server?**
 
-No, because we use `uv`. Unlike traditional Python package managers, where virtual environment activation modifies shell variables like `PATH`, `uv` directly uses the Python interpreter and packages from the `.venv` directory without requiring environment variables to be set first. Just make sure you have created a uv virtual environment with `uv venv` and installed the required packages with `uv pip install` as described in the Getting Started section.
+No, because we use `uv`. Unlike traditional Python package managers, where virtual environment activation modifies shell variables like `PATH`, `uv` directly uses the Python interpreter and packages from the `.venv` directory without requiring environment variables to be set first. Just make sure you have created a uv virtual environment with `uv venv` and installed the required packages with `uv pip install` as described in the previous section.
 
 ---
 

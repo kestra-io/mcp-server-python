@@ -9,7 +9,7 @@ mcp_server_config = {
             "command": "/Users/annageller/.local/bin/uv",
             "args": [
                 "--directory",
-                "/Users/annageller/gh/mcp-kestra-python/src",
+                "/Users/annageller/gh/mcp-server-python/src",
                 "run",
                 "server.py",
             ],

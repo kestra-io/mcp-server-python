@@ -17,14 +17,10 @@ from kestra.codegen_utils import (
 
 load_dotenv(dotenv_path=Path(__file__).parent.parent.parent / ".env")
 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-GOOGLE_GEMINI_MODEL_CODEGEN = os.getenv("GOOGLE_GEMINI_MODEL_CODEGEN")
+GOOGLE_GEMINI_MODEL_CODEGEN = os.environ.get("GOOGLE_GEMINI_MODEL_CODEGEN", "gemini-2.5-flash")
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
     raise ValueError("Please set GOOGLE_API_KEY environment variable")
-if not GOOGLE_GEMINI_MODEL_CODEGEN:
-    raise ValueError(
-        "Please set GOOGLE_GEMINI_MODEL_CODEGEN environment variable. Check the https://ai.google.dev/gemini-api/docs/models for available models."
-    )
 
 HELICONE_API_KEY = os.environ.get("HELICONE_API_KEY")
 

@@ -4,7 +4,6 @@ from mcp.server.fastmcp import FastMCP
 import os
 
 from tools.backfill import register_backfill_tools
-from tools.codegen import register_codegen_tools
 from tools.ee import register_ee_tools
 from tools.execution import register_execution_tools
 from tools.files import register_files_tools
@@ -65,6 +64,7 @@ DISABLED_TOOLS = [tool.strip() for tool in DISABLED_TOOLS if tool.strip()]
 if "backfill" not in DISABLED_TOOLS:
     register_backfill_tools(mcp, client)
 if "codegen" not in DISABLED_TOOLS:
+    from tools.codegen import register_codegen_tools
     register_codegen_tools(mcp, client)
 if "ee" not in DISABLED_TOOLS:
     register_ee_tools(mcp, client)

@@ -24,11 +24,7 @@ from pathlib import Path
 load_dotenv(dotenv_path=Path(__file__).parent.parent.parent / ".env")
 
 
-GOOGLE_GEMINI_MODEL_CODEGEN = os.getenv("GOOGLE_GEMINI_MODEL_CODEGEN")
-if not GOOGLE_GEMINI_MODEL_CODEGEN:
-    raise ValueError(
-        "Please set GOOGLE_GEMINI_MODEL_CODEGEN environment variable. Check the https://ai.google.dev/gemini-api/docs/models for available models."
-    )
+GOOGLE_GEMINI_MODEL_CODEGEN = os.environ.get("GOOGLE_GEMINI_MODEL_CODEGEN", "gemini-2.5-flash")
 
 
 class PluginInfo(BaseModel):
