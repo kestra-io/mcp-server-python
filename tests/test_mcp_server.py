@@ -25,7 +25,7 @@ config = {
         "GOOGLE_API_KEY",
         "-e",
         "HELICONE_API_KEY",
-        "kestra-mcp:latest"
+        "ghcr.io/kestra-io/mcp-server-python:latest"
       ],
       "env": {
         "KESTRA_MCP_DISABLED_TOOLS": "",

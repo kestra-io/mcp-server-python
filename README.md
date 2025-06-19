@@ -4,9 +4,63 @@
 
 You can run the MCP Server in a Docker container. This is useful if you want to avoid managing Python environments or dependencies on your local machine.
 
-### Example Configuration for Docker
+### Minimal configuration for OSS users
 
 Paste the following configuration into your MCP settings (e.g., Cursor, Claude, or VS Code):
+
+```json
+{
+  "mcpServers": {
+    "kestra": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e", "KESTRA_BASE_URL",
+        "-e", "KESTRA_TENANT_ID",
+        "-e", "KESTRA_MCP_DISABLED_TOOLS",
+        "ghcr.io/kestra-io/mcp-server-python:latest"
+      ],
+      "env": {
+        "KESTRA_BASE_URL": "http://host.docker.internal:8080/api/v1",
+        "KESTRA_TENANT_ID": "main",
+        "KESTRA_MCP_DISABLED_TOOLS": "ee,codegen"
+      }
+    }
+  }
+}
+```
+
+### Minimal configuration for EE users
+
+```json
+{
+  "mcpServers": {
+    "kestra": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e", "KESTRA_BASE_URL",
+        "-e", "KESTRA_API_TOKEN",
+        "-e", "KESTRA_TENANT_ID",
+        "-e", "KESTRA_MCP_DISABLED_TOOLS",
+        "ghcr.io/kestra-io/mcp-server-python:latest"
+      ],
+      "env": {
+        "KESTRA_BASE_URL": "http://host.docker.internal:8080/api/v1",
+        "KESTRA_API_TOKEN": "<your_kestra_api_token>",
+        "KESTRA_TENANT_ID": "main",
+        "KESTRA_MCP_DISABLED_TOOLS": "codegen"
+      }
+    }
+  }
+}
+```
+
+### Detailed Configuration using Docker
 
 ```json
 {
@@ -35,11 +89,11 @@ Paste the following configuration into your MCP settings (e.g., Cursor, Claude, 
         "KESTRA_TENANT_ID": "main",
         "KESTRA_USERNAME": "admin",
         "KESTRA_PASSWORD": "admin",
-        "KESTRA_MCP_DISABLED_TOOLS": "", # for OSS, set this to "ee"
+        "KESTRA_MCP_DISABLED_TOOLS": "ee",
         "GOOGLE_GEMINI_MODEL_AGENT": "gemini-2.0-flash",
         "GOOGLE_GEMINI_MODEL_CODEGEN": "gemini-2.5-flash",
         "GOOGLE_API_KEY": "<your_google_api_key>",
-        # "HELICONE_API_KEY": "<your_helicone_api_key>" # optional for codegen-tool tracing
+        "HELICONE_API_KEY": "<optional_for_codegen_tracing>"
       }
     }
   }
@@ -52,17 +106,15 @@ Paste the following configuration into your MCP settings (e.g., Cursor, Claude, 
 - To disable Enterprise Edition tools in OSS, set `KESTRA_MCP_DISABLED_TOOLS=ee`.
 - The `host.docker.internal` hostname allows the Docker container to access services running on your host machine (such as the Kestra API server on port 8080). This works on macOS and Windows. On Linux, you may need to use the host network mode or set up a custom bridge.
 - The `-e` flags pass environment variables from your MCP configuration into the Docker container. 
-- The Docker image `kestra-mcp:latest` must be built or pulled before running. You can build it with:
-  ```bash
-  docker build -t kestra-mcp:latest .
-  ```
+
+
 
 ---
 
 ### Available Tools
 
 - 🔄 backfill
-- 🤖 codegen
+- 🤖 codegen (Beta, needs Google Gemini API key)
 - ⚙️ ee (Enterprise Edition tools)
 - ▶️ execution
 - 📁 files
@@ -84,7 +136,7 @@ KESTRA_MCP_DISABLED_TOOLS=files
 To disable multiple tools, separate them with comma:
 
 ```dotenv
-KESTRA_MCP_DISABLED_TOOLS=backfill,codegen,ee,execution,files,flow,kv,namespace,replay,restart,resume
+KESTRA_MCP_DISABLED_TOOLS=codegen,ee
 ```
 
 ---
