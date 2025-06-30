@@ -6,6 +6,7 @@ pydantic
 
 # for running tests locally, install pytest:
 pytest
+pytest-asyncio
 
 # for CodeGen tool, uncomment the ones below:
 google-genai

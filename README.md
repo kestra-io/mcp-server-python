@@ -1,6 +1,6 @@
 ## Kestra Python MCP Server
 
-> **⚠️ Beta Notice:** The Kestra MCP Server is currently in **Beta** and may undergo significant changes in the next few releases. API interfaces, tool names, and functionality may change without notice. We recommend testing thoroughly in development environments before using in production.
+> **⚠️ Beta Notice:** The Kestra MCP Server is currently in **Beta** and is intended for Kestra `0.23.0` and higher. It may undergo significant changes in the next few releases. API interfaces, tool names, and functionality may change without notice. We recommend testing thoroughly in development environments before using in production.
 
 You can run the MCP Server in a Docker container. This is useful if you want to avoid managing Python environments or dependencies on your local machine.
 
