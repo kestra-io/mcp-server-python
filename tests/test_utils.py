@@ -6,10 +6,10 @@ import asyncio
 mcp_server_config = {
     "mcpServers": {
         "kestraPython": {
-            "command": "/Users/annageller/.local/bin/uv",
+            "command": "uv",
             "args": [
                 "--directory",
-                "/Users/annageller/gh/mcp-server-python/src",
+                "src",
                 "run",
                 "server.py",
             ],
