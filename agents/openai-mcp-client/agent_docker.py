@@ -62,25 +62,13 @@ async def main(prompt: str, file_output: bool):
                 "KESTRA_API_TOKEN",
                 "-e",
                 "KESTRA_TENANT_ID",
-                "-e",
-                "GOOGLE_GEMINI_MODEL_AGENT",
-                "-e",
-                "GOOGLE_GEMINI_MODEL_CODEGEN",
-                "-e",
-                "GOOGLE_API_KEY",
-                "-e",
-                "HELICONE_API_KEY",
                 "kestra-mcp:latest",
             ],
             "env": {
                 "KESTRA_MCP_DISABLED_TOOLS": "",
-                "KESTRA_BASE_URL": "http://host.docker.internal:38080/api/v1", # adjust to your Kestra instance, but keep host.docker.internal if you run Kestra in Docker
+                "KESTRA_BASE_URL": "http://host.docker.internal:28080/api/v1", # adjust to your Kestra instance, but keep host.docker.internal if you run Kestra in Docker
                 "KESTRA_API_TOKEN": os.getenv("KESTRA_API_TOKEN"),
-                "KESTRA_TENANT_ID": os.getenv("KESTRA_TENANT_ID"),
-                "GOOGLE_GEMINI_MODEL_AGENT": "gemini-2.0-flash",
-                "GOOGLE_GEMINI_MODEL_CODEGEN": "gemini-2.5-flash",
-                "GOOGLE_API_KEY": os.getenv("GOOGLE_API_KEY"),
-                # "HELICONE_API_KEY": os.getenv("HELICONE_API_KEY"), # optional for CodeGen tool tracing
+                "KESTRA_TENANT_ID": os.getenv("KESTRA_TENANT_ID")
             },
         },
     ) as server:

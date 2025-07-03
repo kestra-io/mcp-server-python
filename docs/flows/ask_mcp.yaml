@@ -47,7 +47,7 @@ tasks:
       KESTRA_BASE_URL: "{{ inputs.base_url }}"
       KESTRA_API_TOKEN: "{{ secret('KESTRA_API_TOKEN') }}"
       KESTRA_TENANT_ID: "{{ inputs.tenant_id ?? '' }}"
-      KESTRA_MCP_DISABLED_TOOLS: codegen,plugin
+      KESTRA_MCP_DISABLED_TOOLS: plugin
     beforeCommands:
       - pip install uv 2> /dev/null
       - uv python install 3.12 2> /dev/null

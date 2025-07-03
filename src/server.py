@@ -57,15 +57,12 @@ mcp = FastMCP(
 )
 client = make_kestra_client()
 
-# e.g. KESTRA_MCP_DISABLED_TOOLS=codegen,ee
+# e.g. KESTRA_MCP_DISABLED_TOOLS=ee
 DISABLED_TOOLS = os.getenv("KESTRA_MCP_DISABLED_TOOLS", "").split(",")
 DISABLED_TOOLS = [tool.strip() for tool in DISABLED_TOOLS if tool.strip()]
 
 if "backfill" not in DISABLED_TOOLS:
     register_backfill_tools(mcp, client)
-if "codegen" not in DISABLED_TOOLS:
-    from tools.codegen import register_codegen_tools
-    register_codegen_tools(mcp, client)
 if "ee" not in DISABLED_TOOLS:
     register_ee_tools(mcp, client)
 if "execution" not in DISABLED_TOOLS:
