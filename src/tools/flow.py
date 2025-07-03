@@ -236,3 +236,32 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             raise ValueError(
                 "Action must be one of: enable, disable, list_revisions, list_dependencies, get_yaml, delete"
             )
+
+    @mcp.tool()
+    async def generate_flow(
+        user_prompt: Annotated[
+            str,
+            Field(description="The user prompt describing what flow to generate"),
+        ],
+        flow_yaml: Annotated[
+            str,
+            Field(description="The existing flow YAML to use as context for generation. Optional - if not provided, an empty string will be used."),
+        ] = "",
+    ) -> str:
+        """Generate or regenerate a flow based on a prompt and existing flow context.
+        
+        This tool uses Kestra's AI flow generation endpoint to create or modify flows
+        based on natural language descriptions and existing flow definitions.
+
+        This tool is available in Kestra 0.24 and later.
+        
+        Returns the generated flow YAML definition."""
+        payload = {
+            "userPrompt": user_prompt,
+            "flowYaml": flow_yaml or ""
+        }
+        
+        resp = await client.post("/ai/generate/flow", json=payload)
+        resp.raise_for_status()
+        
+        return resp.text
