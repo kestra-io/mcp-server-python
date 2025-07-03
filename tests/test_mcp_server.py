@@ -18,9 +18,6 @@ config = {
         "-e",
         "KESTRA_TENANT_ID",
         "-e",
-        "GOOGLE_GEMINI_MODEL_AGENT",
-        "-e",
-        "GOOGLE_GEMINI_MODEL_CODEGEN",
         "-e",
         "GOOGLE_API_KEY",
         "-e",
@@ -31,11 +28,7 @@ config = {
         "KESTRA_MCP_DISABLED_TOOLS": "",
         "KESTRA_BASE_URL": "http://host.docker.internal:38080/api/v1",
         "KESTRA_API_TOKEN": os.getenv("KESTRA_API_TOKEN"),
-        "KESTRA_TENANT_ID": os.getenv("KESTRA_TENANT_ID"),
-        "GOOGLE_GEMINI_MODEL_AGENT": "gemini-2.0-flash",
-        "GOOGLE_GEMINI_MODEL_CODEGEN": "gemini-2.5-flash",
-        "GOOGLE_API_KEY": os.getenv("GOOGLE_API_KEY"),
-        "HELICONE_API_KEY": os.getenv("HELICONE_API_KEY")
+        "KESTRA_TENANT_ID": os.getenv("KESTRA_TENANT_ID")
       }
     }
   }
@@ -61,7 +54,6 @@ async def test_list_tools():
         # Base tools that are always available
         base_tools = {
             "backfill_executions",
-            "generate_yaml",
             "execute_flow",
             "add_execution_labels",
             "list_executions",

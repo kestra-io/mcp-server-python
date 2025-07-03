@@ -27,7 +27,7 @@ Paste the following configuration into your MCP settings (e.g., Cursor, Claude, 
       "env": {
         "KESTRA_BASE_URL": "http://host.docker.internal:8080/api/v1",
         "KESTRA_TENANT_ID": "main",
-        "KESTRA_MCP_DISABLED_TOOLS": "ee,codegen"
+        "KESTRA_MCP_DISABLED_TOOLS": "ee"
       }
     }
   }
@@ -62,7 +62,7 @@ If you enabled Basic Auth, use:
       "env": {
         "KESTRA_BASE_URL": "http://host.docker.internal:8080/api/v1",
         "KESTRA_TENANT_ID": "main",
-        "KESTRA_MCP_DISABLED_TOOLS": "ee,codegen",
+        "KESTRA_MCP_DISABLED_TOOLS": "ee",
         "KESTRA_USERNAME": "admin@kestra.io",
         "KESTRA_PASSWORD": "your_password"
       }
@@ -93,8 +93,7 @@ If you enabled Basic Auth, use:
       "env": {
         "KESTRA_BASE_URL": "http://host.docker.internal:8080/api/v1",
         "KESTRA_API_TOKEN": "<your_kestra_api_token>",
-        "KESTRA_TENANT_ID": "main",
-        "KESTRA_MCP_DISABLED_TOOLS": "codegen"
+        "KESTRA_TENANT_ID": "main"
       }
     }
   }
@@ -120,10 +119,6 @@ If you enabled Basic Auth, use:
         "-e", "KESTRA_USERNAME",
         "-e", "KESTRA_PASSWORD",
         "-e", "KESTRA_MCP_DISABLED_TOOLS",
-        "-e", "GOOGLE_GEMINI_MODEL_AGENT",
-        "-e", "GOOGLE_GEMINI_MODEL_CODEGEN",
-        "-e", "GOOGLE_API_KEY",
-        "-e", "HELICONE_API_KEY",
         "ghcr.io/kestra-io/mcp-server-python:latest"
       ],
       "env": {
@@ -132,11 +127,7 @@ If you enabled Basic Auth, use:
         "KESTRA_TENANT_ID": "main",
         "KESTRA_USERNAME": "admin",
         "KESTRA_PASSWORD": "admin",
-        "KESTRA_MCP_DISABLED_TOOLS": "ee",
-        "GOOGLE_GEMINI_MODEL_AGENT": "gemini-2.0-flash",
-        "GOOGLE_GEMINI_MODEL_CODEGEN": "gemini-2.5-flash",
-        "GOOGLE_API_KEY": "<your_google_api_key>",
-        "HELICONE_API_KEY": "<optional_for_codegen_tracing>"
+        "KESTRA_MCP_DISABLED_TOOLS": "ee"
       }
     }
   }
@@ -155,7 +146,6 @@ If you enabled Basic Auth, use:
 ### Available Tools
 
 - 🔄 backfill
-- 🤖 codegen (Beta, needs Google Gemini API key)
 - ⚙️ ee (Enterprise Edition tools)
 - ▶️ execution
 - 📁 files
@@ -177,7 +167,7 @@ KESTRA_MCP_DISABLED_TOOLS=files
 To disable multiple tools, separate them with comma:
 
 ```dotenv
-KESTRA_MCP_DISABLED_TOOLS=codegen,ee
+KESTRA_MCP_DISABLED_TOOLS=ee
 ```
 
 ---

@@ -8,11 +8,6 @@ pydantic
 pytest
 pytest-asyncio
 
-# for CodeGen tool, uncomment the ones below:
-google-genai
-tenacity
-pandas
-
-# for running agents using Kestra MCP server, uncomment packages below: 
+# for running agents using Kestra MCP server: 
 openai-agents
 google-adk
