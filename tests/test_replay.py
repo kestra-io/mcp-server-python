@@ -24,7 +24,7 @@ async def test_replay_execution():
         first_execution = await client.call_tool(
             "execute_flow", {"namespace": "company.team", "flow_id": "fail_randomly"}
         )
-        first_execution_json = json.loads(first_execution[0].text)
+        first_execution_json = json.loads(first_execution.content[0].text)
         first_execution_id = first_execution_json["id"]
         assert first_execution_json["flowId"] == "fail_randomly"
         assert first_execution_json["namespace"] == "company.team"
@@ -33,7 +33,7 @@ async def test_replay_execution():
         second_execution = await client.call_tool(
             "execute_flow", {"namespace": "company.team", "flow_id": "fail_randomly"}
         )
-        second_execution_json = json.loads(second_execution[0].text)
+        second_execution_json = json.loads(second_execution.content[0].text)
         second_execution_id = second_execution_json["id"]
         assert second_execution_json["flowId"] == "fail_randomly"
         assert second_execution_json["namespace"] == "company.team"
@@ -54,7 +54,7 @@ async def test_replay_execution():
             "replay_execution",
             {"flow_id": "fail_randomly", "namespace": "company.team"},
         )
-        replay_text = replay_result[0].text
+        replay_text = replay_result.content[0].text
         print(f"Replay result: {replay_text}")
         assert "Replayed execution" in replay_text
         assert "fail_randomly" in replay_text
@@ -65,7 +65,7 @@ async def test_replay_execution():
         replay_result = await client.call_tool(
             "replay_execution", {"ids": [first_execution_id]}
         )
-        replay_json = json.loads(replay_result[0].text)
+        replay_json = json.loads(replay_result.content[0].text)
         print(f"Replay by ID result: {json.dumps(replay_json, indent=2)}")
         assert replay_json["count"] == 1
 
