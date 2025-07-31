@@ -871,7 +871,7 @@ async def test_invite_users():
             print(f"Third invitation response: {json.dumps(response_json, indent=2)}")
             assert response_json["email"] == "test3@kestra.io"
             assert response_json["status"] == "PENDING"
-            # API uses "groups" instead of "groupIds" in current version
+            # API uses "groups" instead of "groupIds" in 0.24 and higher
             assert ("groupIds" in response_json) or ("groups" in response_json)
             groups_field = "groupIds" if "groupIds" in response_json else "groups"
             # Group assignment may not work in all test environments (enterprise feature)
