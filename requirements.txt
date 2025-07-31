@@ -1,13 +1,13 @@
-httpx
-pyyaml
-python-dotenv
-fastmcp
-pydantic
+httpx==0.28.1
+pyyaml==6.0.2
+python-dotenv==1.1.1
+fastmcp==2.10.6
+pydantic==2.11.7
 
 # for running tests locally, install pytest:
-pytest
-pytest-asyncio
+pytest==8.4.1
+pytest-asyncio==1.1.0
 
 # for running agents using Kestra MCP server: 
-openai-agents
-google-adk
+openai-agents==0.2.4
+google-adk==1.8.0
