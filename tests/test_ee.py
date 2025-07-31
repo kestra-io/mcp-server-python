@@ -804,7 +804,7 @@ async def test_invite_users():
         assert "link" in response_json
         assert "sentAt" in response_json
         assert "expiredAt" in response_json
-        # deleted and isExpired fields are optional in current API
+        # deleted and isExpired fields are optional in 0.24 and higher
         if "deleted" in response_json:
             assert isinstance(response_json["deleted"], bool)
         if "isExpired" in response_json:
