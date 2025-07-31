@@ -29,7 +29,7 @@ async def test_backfill():
                 "labels": [{"key": "backfillFrom", "value": "unitTest"}],
             },
         )
-        response_json = json.loads(result.content[0].text)
+        response_json = json.loads(result[0].text)
         assert response_json["namespace"] == namespace
         assert response_json["flowId"] == flow_id
         assert "backfill" in response_json

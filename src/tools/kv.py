@@ -18,10 +18,10 @@ def register_kv_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             str, Field(description="Required for 'get', 'set', and 'delete' actions")
         ] = None,
         value: Annotated[Any, Field(description="Required for 'set' action")] = None,
-    ) -> Union[dict, List[dict], str]:
+    ) -> Union[dict, List[str], str]:
         """Perform a KV operation in the given namespace. Returns:
         - for "get": the value stored at the key (as JSON);
-        - for "list": a list of all key metadata objects in the namespace;
+        - for "list": a list of all keys in the namespace;
         - for "set": {"status": "ok"} on success;
         - for "delete": {"deleted": <original response>} or an error message.
         """

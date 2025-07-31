@@ -18,7 +18,7 @@ async def test_create_flow_from_yaml():
         result = await client.call_tool(
             "create_flow_from_yaml", {"yaml_definition": expected_yaml}
         )
-        response_json = json.loads(result.content[0].text)
+        response_json = json.loads(result[0].text)
         returned_source = response_json.get("source", "")
         assert expected_yaml.strip() == returned_source.strip()
 
@@ -32,7 +32,7 @@ async def test_disable_flow():
             "manage_flow",
             {"action": "disable", "namespace": "company.team", "flow_id": "hello_mcp"},
         )
-        response_json = json.loads(result.content[0].text)
+        response_json = json.loads(result[0].text)
         # The response should contain a 'count' field indicating how many flows were disabled
         assert "count" in response_json
         assert response_json["count"] >= 1
@@ -50,7 +50,7 @@ async def test_enable_flow():
             "manage_flow",
             {"action": "disable", "namespace": "company.team", "flow_id": "hello_mcp"},
         )
-        disable_response = json.loads(disable_result.content[0].text)
+        disable_response = json.loads(disable_result[0].text)
         assert "count" in disable_response
         assert disable_response["count"] >= 1
 
@@ -59,7 +59,7 @@ async def test_enable_flow():
             "manage_flow",
             {"action": "enable", "namespace": "company.team", "flow_id": "hello_mcp"},
         )
-        response_json = json.loads(result.content[0].text)
+        response_json = json.loads(result[0].text)
         # The response should contain a 'count' field indicating how many flows were enabled
         assert "count" in response_json
         assert response_json["count"] >= 1

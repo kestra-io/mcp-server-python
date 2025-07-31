@@ -36,7 +36,7 @@ async def test_kv_actions():
                 },
             )
             print(f"Set {key} result: {result}")
-            assert json.loads(result.content[0].text)["status"] == "ok"
+            assert json.loads(result[0].text)["status"] == "ok"
 
         # Test getting values
         for key, expected_value in test_cases:
@@ -45,7 +45,7 @@ async def test_kv_actions():
                 {"namespace": "company.team", "action": "get", "key": key},
             )
             print(f"Get {key} result: {result}")
-            response = json.loads(result.content[0].text)
+            response = json.loads(result[0].text)
             assert "type" in response
             assert "value" in response
             # For JSON values, compare directly if already a dict
@@ -60,9 +60,9 @@ async def test_kv_actions():
         result = await client.call_tool(
             "manage_kv_store", {"namespace": "company.team", "action": "list"}
         )
-        print(f"List keys result: {json.loads(result.content[0].text)}")
+        print(f"List keys result: {json.loads(result[0].text)}")
         # Parse each key info from the result list
-        keys = [json.loads(item.text) for item in result.content]
+        keys = [json.loads(item.text) for item in result]
         assert isinstance(keys, list)
         # Verify all our test keys are in the list
         for key, _ in test_cases:
@@ -83,7 +83,7 @@ async def test_kv_actions():
                 "manage_kv_store",
                 {"namespace": "company.team", "action": "delete", "key": key},
             )
-            deleted_response = json.loads(result.content[0].text)
+            deleted_response = json.loads(result[0].text)
             print(f"Delete {key} result: {deleted_response}")
             assert deleted_response.get("deleted") is True
 
@@ -124,7 +124,7 @@ async def test_kv_actions():
             },
         )
         print(f"Delete non-existent key result: {result}")
-        deleted_response = json.loads(result.content[0].text)
+        deleted_response = json.loads(result[0].text)
         assert deleted_response.get("deleted") is False
 
 
