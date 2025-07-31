@@ -811,7 +811,7 @@ async def test_invite_users():
             assert isinstance(response_json["isExpired"], bool)
         assert "superAdmin" in response_json
         assert "tenantId" in response_json
-        # API uses "groups" instead of "groupIds" in current version
+        # API uses "groups" instead of "groupIds" in 0.24 and higher
         assert ("groupIds" in response_json) or ("groups" in response_json)
         groups_field = "groupIds" if "groupIds" in response_json else "groups"
         assert isinstance(response_json[groups_field], list)
