@@ -833,7 +833,7 @@ async def test_invite_users():
         )
         response_json = json.loads(result.content[0].text)
         print(f"Role invitation response: {json.dumps(response_json, indent=2)}")
-        # API uses "roles" instead of "bindings" in current version
+        # API uses "roles" instead of "bindings" in 0.24 and higher
         assert ("bindings" in response_json) or ("roles" in response_json)
         bindings_field = "bindings" if "bindings" in response_json else "roles"
         # Role assignment may not work in all test environments (enterprise feature)
