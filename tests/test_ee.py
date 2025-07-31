@@ -1038,7 +1038,7 @@ async def test_configuration():
             response_json["environment"]["name"], str
         )
         assert "url" in response_json and isinstance(response_json["url"], str)
-        # isBasicAuthEnabled field is optional in current API
+        # isBasicAuthEnabled field is optional in 0.24 and higher
         if "isBasicAuthEnabled" in response_json:
             assert isinstance(response_json["isBasicAuthEnabled"], bool)
         assert "systemNamespace" in response_json and isinstance(
