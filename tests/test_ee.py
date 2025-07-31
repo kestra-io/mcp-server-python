@@ -901,7 +901,7 @@ async def test_invite_users():
             print(
                 f"Combined invitation response: {json.dumps(response_json, indent=2)}"
             )
-            # API uses "groups" instead of "groupIds" in current version  
+            # API uses "groups" instead of "groupIds" in 0.24 and higher
             assert ("groupIds" in response_json) or ("groups" in response_json)
             groups_field = "groupIds" if "groupIds" in response_json else "groups"
             # Combined role/group assignment may not work in test environment (enterprise feature)
