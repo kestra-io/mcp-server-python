@@ -25,7 +25,7 @@ async def create_flow(file: str, client: Client) -> dict:
     result = await client.call_tool(
         "create_flow_from_yaml", {"yaml_definition": yaml_flow}
     )
-    response_json = json.loads(result[0].text)
+    response_json = json.loads(result.content[0].text)
     return response_json
 
 
@@ -36,7 +36,7 @@ async def create_test(file: str, client: Client) -> dict:
     result = await client.call_tool(
         "manage_tests", {"action": "create", "yaml_source": yaml_source}
     )
-    response_json = json.loads(result[0].text)
+    response_json = json.loads(result.content[0].text)
     return response_json
 
 
@@ -47,7 +47,7 @@ async def create_app(file: str, client: Client) -> dict:
     result = await client.call_tool(
         "manage_apps", {"action": "create", "yaml_source": yaml_source}
     )
-    response_json = json.loads(result[0].text)
+    response_json = json.loads(result.content[0].text)
     return response_json
 
 
@@ -75,7 +75,7 @@ async def poll_for_execution(
         result = await client.call_tool(
             "manage_executions", {"action": "get", "execution_id": execution_id}
         )
-        response_json = json.loads(result[0].text) if result and result[0].text else {}
+        response_json = json.loads(result.content[0].text) if result and result.content[0].text else {}
         assert response_json["id"] == execution_id
         current_state = response_json["state"]["current"]
         if desired_state:

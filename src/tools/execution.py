@@ -45,7 +45,7 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 description="The date to schedule the execution for, which must be provided as a string in ISO 8601 format, e.g. '2025-12-28T12:00:00Z'. Default is an empty string."
             ),
         ] = "",
-    ) -> str:
+    ) -> dict:
         """Start a flow execution for a given namespace and flow_id."""
         if flow_id in _RESERVED_FLOW_IDS:
             not_allowed = ", ".join(sorted(_RESERVED_FLOW_IDS))

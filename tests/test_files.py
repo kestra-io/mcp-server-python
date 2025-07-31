@@ -31,15 +31,15 @@ async def test_namespace_file_actions():
                 "file_content": original_content,
             },
         )
-        assert json.loads(result[0].text)["status"] == "created"
+        assert json.loads(result.content[0].text)["status"] == "created"
 
         # Test file retrieval
         content = await client.call_tool(
             "namespace_file_action",
             {"namespace": "company.team", "path": test_file_path, "action": "get"},
         )
-        print(f"Get etl.py result: {content[0].text}")
-        retrieved = json.loads(content[0].text)
+        print(f"Get etl.py result: {content.content[0].text}")
+        retrieved = json.loads(content.content[0].text)
         assert "import pandas as pd" in retrieved
 
         # Test file search
@@ -47,8 +47,8 @@ async def test_namespace_file_actions():
             "namespace_file_action",
             {"namespace": "company.team", "action": "search", "q": "etl.py"},
         )
-        print(f"First in a list of search results for etl.py: {search_results[0].text}")
-        paths = [item.text for item in search_results]
+        print(f"First in a list of search results for etl.py: {search_results.content[0].text}")
+        paths = [item.text for item in search_results.content]
         assert any("etl.py" in path for path in paths)
 
         # Test file move
@@ -61,15 +61,15 @@ async def test_namespace_file_actions():
                 "to_path": "moved_etl.py",
             },
         )
-        assert json.loads(move_result[0].text)["status"] == "moved"
+        assert json.loads(move_result.content[0].text)["status"] == "moved"
 
         # Verify the file was moved
         moved_content = await client.call_tool(
             "namespace_file_action",
             {"namespace": "company.team", "path": "moved_etl.py", "action": "get"},
         )
-        print(f"Get moved_etl.py result: {moved_content[0].text}")
-        retrieved = json.loads(moved_content[0].text)
+        print(f"Get moved_etl.py result: {moved_content.content[0].text}")
+        retrieved = json.loads(moved_content.content[0].text)
         assert "import pandas as pd" in retrieved
 
         # Test file deletion
@@ -77,7 +77,7 @@ async def test_namespace_file_actions():
             "namespace_file_action",
             {"namespace": "company.team", "path": "moved_etl.py", "action": "delete"},
         )
-        assert json.loads(delete_result[0].text)["status"] == "deleted"
+        assert json.loads(delete_result.content[0].text)["status"] == "deleted"
 
 
 @pytest.mark.asyncio
@@ -90,7 +90,7 @@ async def test_namespace_directory_actions():
             {"namespace": "company.team", "path": "test_dir", "action": "create"},
         )
         print(f"Create test_dir result: {result}")
-        assert json.loads(result[0].text)["status"] == "directory_created"
+        assert json.loads(result.content[0].text)["status"] == "directory_created"
 
         # Create a subdirectory
         result = await client.call_tool(
@@ -101,7 +101,7 @@ async def test_namespace_directory_actions():
                 "action": "create",
             },
         )
-        assert json.loads(result[0].text)["status"] == "directory_created"
+        assert json.loads(result.content[0].text)["status"] == "directory_created"
 
         # Test directory listing
         listing = await client.call_tool(
@@ -109,7 +109,7 @@ async def test_namespace_directory_actions():
             {"namespace": "company.team", "path": "test_dir", "action": "list"},
         )
         print(f"List test_dir result: {listing}")
-        listing_data = json.loads(listing[0].text)
+        listing_data = json.loads(listing.content[0].text)
         # Verify the response schema for a single directory item
         assert "type" in listing_data
         assert "size" in listing_data
@@ -129,7 +129,7 @@ async def test_namespace_directory_actions():
                 "to_path": "moved_subdir",
             },
         )
-        assert json.loads(move_result[0].text)["status"] == "directory_moved"
+        assert json.loads(move_result.content[0].text)["status"] == "directory_moved"
 
         # Verify the directory was moved by checking its properties
         moved_listing = await client.call_tool(
@@ -137,8 +137,8 @@ async def test_namespace_directory_actions():
             {"namespace": "company.team", "path": "moved_subdir", "action": "list"},
         )
         print(f"List moved_subdir result: {moved_listing}")
-        if moved_listing:  # Check if we got a response
-            moved_data = json.loads(moved_listing[0].text)
+        if moved_listing.content:  # Check if we got content in the response
+            moved_data = json.loads(moved_listing.content[0].text)
             assert moved_data["type"] == "Directory"
             assert moved_data["fileName"] == "moved_subdir"
 
@@ -148,7 +148,7 @@ async def test_namespace_directory_actions():
             {"namespace": "company.team", "path": "moved_subdir", "action": "delete"},
         )
         print(f"Delete test_dir result: {delete_result}")
-        assert json.loads(delete_result[0].text)["status"] == "directory_deleted"
+        assert json.loads(delete_result.content[0].text)["status"] == "directory_deleted"
 
 
 if __name__ == "__main__":

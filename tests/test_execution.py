@@ -26,7 +26,7 @@ async def test_execute_flow():
             "execute_flow",
             {"namespace": namespace, "flow_id": flow_id},
         )
-        response_json = json.loads(result[0].text) if result and result[0].text else {}
+        response_json = json.loads(result.content[0].text) if result and result.content[0].text else {}
         print(response_json)
         assert response_json["url"] is not None
         assert response_json["inputs"]["data"] == "customers"
@@ -41,7 +41,7 @@ async def test_execute_flow():
                 "inputs": {"data": "products", "startDate": "2026-01-01"},
             },
         )
-        response_json = json.loads(result[0].text) if result and result[0].text else {}
+        response_json = json.loads(result.content[0].text) if result and result.content[0].text else {}
         print("Execute flow with custom inputs response:", response_json)
         assert response_json["url"] is not None
         assert response_json["inputs"]["data"] == "products"
@@ -60,7 +60,7 @@ async def test_execute_flow():
                 ],
             },
         )
-        response_json = json.loads(result[0].text) if result and result[0].text else {}
+        response_json = json.loads(result.content[0].text) if result and result.content[0].text else {}
         print("Execute flow with custom labels response:", response_json)
         assert response_json["url"] is not None
         assert "labels" in response_json
@@ -83,7 +83,7 @@ async def test_execute_flow():
             "execute_flow",
             {"namespace": namespace, "flow_id": flow_id, "schedule_date": future_time},
         )
-        response_json = json.loads(result[0].text) if result and result[0].text else {}
+        response_json = json.loads(result.content[0].text) if result and result.content[0].text else {}
         print("Execute flow with scheduled date response:", response_json)
         assert response_json["url"] is not None
         assert "state" in response_json
@@ -104,7 +104,7 @@ async def test_execute_flow():
             "execute_flow",
             {"namespace": namespace, "flow_id": flow_id, "wait": True},
         )
-        response_json = json.loads(result[0].text) if result and result[0].text else {}
+        response_json = json.loads(result.content[0].text) if result and result.content[0].text else {}
         print("Execute flow with wait=True response:", response_json)
         assert response_json["url"] is not None
         assert "state" in response_json
@@ -133,7 +133,7 @@ async def test_execute_flow():
                 "wait": True,
             },
         )
-        response_json = json.loads(result[0].text) if result and result[0].text else {}
+        response_json = json.loads(result.content[0].text) if result and result.content[0].text else {}
         print("Execute flow with base revision response:", response_json)
         assert response_json["url"] is not None
         assert "taskRunList" in response_json
@@ -153,7 +153,7 @@ async def test_execute_flow():
                 ],
             },
         )
-        response_json = json.loads(result[0].text) if result and result[0].text else {}
+        response_json = json.loads(result.content[0].text) if result and result.content[0].text else {}
         print("Add execution labels response:", response_json)
         assert "labels" in response_json
         # Convert response labels to a dict for easier checking
@@ -179,7 +179,7 @@ async def test_execute_flow():
             "manage_flow",
             {"action": "delete", "namespace": namespace, "flow_id": flow_id},
         )
-        response_json = json.loads(result[0].text) if result and result[0].text else {}
+        response_json = json.loads(result.content[0].text) if result and result.content[0].text else {}
         print("Delete flow response:", response_json)
 
         # Verify flow was deleted by attempting to get it
@@ -198,7 +198,7 @@ async def test_list_executions():
         result = await client.call_tool(
             "list_executions", {"namespace": "company.team", "flow_id": "get_data"}
         )
-        response_json = json.loads(result[0].text) if result and result[0].text else {}
+        response_json = json.loads(result.content[0].text) if result and result.content[0].text else {}
         print("List executions for flow response:", response_json)
         # Handle both single execution and list of executions
         executions = (
@@ -221,7 +221,7 @@ async def test_list_executions():
                 "minutes": 15,
             },
         )
-        response_json = json.loads(result[0].text) if result and result[0].text else {}
+        response_json = json.loads(result.content[0].text) if result and result.content[0].text else {}
         print("List recent executions response:", response_json)
         # Handle empty response case
         if not response_json:
@@ -252,7 +252,7 @@ async def test_list_executions():
             "list_executions",
             {"namespace": "company.team", "flow_id": "get_data", "count": 1},
         )
-        response_json = json.loads(result[0].text) if result and result[0].text else {}
+        response_json = json.loads(result.content[0].text) if result and result.content[0].text else {}
         print("List latest execution response:", response_json)
         # Handle empty response case
         if not response_json:
@@ -298,7 +298,7 @@ async def test_manage_executions():
             "execute_flow",
             {"namespace": namespace, "flow_id": flow_id},
         )
-        response_json = json.loads(result[0].text) if result and result[0].text else {}
+        response_json = json.loads(result.content[0].text) if result and result.content[0].text else {}
         print("Execute flow response:", response_json)
         execution_id = response_json["id"]
 
@@ -317,7 +317,7 @@ async def test_manage_executions():
                 "manage_executions", {"action": "pause", "execution_id": execution_id}
             )
             response_json = (
-                json.loads(result[0].text) if result and result[0].text else {}
+                json.loads(result.content[0].text) if result and result.content[0].text else {}
             )
             print("Pause execution response:", response_json)
             assert response_json["status"] == "paused"
@@ -327,7 +327,7 @@ async def test_manage_executions():
             "manage_executions",
             {"action": "kill", "execution_id": execution_id, "cascade": True},
         )
-        response_json = json.loads(result[0].text) if result and result[0].text else {}
+        response_json = json.loads(result.content[0].text) if result and result.content[0].text else {}
         print("Kill execution response:", response_json)
         assert response_json["executionId"] == execution_id
         assert response_json["status"] in ["kill_requested", "already_finished"]
@@ -337,7 +337,7 @@ async def test_manage_executions():
             "execute_flow",
             {"namespace": "company.team", "flow_id": "get_data", "wait": True},
         )
-        response_json = json.loads(result[0].text) if result and result[0].text else {}
+        response_json = json.loads(result.content[0].text) if result and result.content[0].text else {}
         print("Execute get_data flow response:", response_json)
         assert response_json["url"] is not None
         assert response_json["state"]["current"] in ["SUCCESS", "FAILED", "WARNING"]
@@ -351,7 +351,7 @@ async def test_manage_executions():
                 "status": "WARNING",
             },
         )
-        response_json = json.loads(result[0].text) if result and result[0].text else {}
+        response_json = json.loads(result.content[0].text) if result and result.content[0].text else {}
         print("Change status to WARNING response:", response_json)
         assert response_json["id"] == response_json["id"]
         assert response_json["state"]["current"] == "WARNING"
@@ -380,7 +380,7 @@ async def test_execute_flow_with_subflow():  # TODO
             "execute_flow",
             {"namespace": "company.team", "flow_id": "sleeper"},
         )
-        response_json = json.loads(result[0].text) if result and result[0].text else {}
+        response_json = json.loads(result.content[0].text) if result and result.content[0].text else {}
         print("Execute flow with subflow response:", response_json)
         parent_execution_id = response_json["id"]
         correlation_id = None
@@ -404,7 +404,7 @@ async def test_execute_flow_with_subflow():  # TODO
                 {"namespace": "company.team", "flow_id": "hello_mcp", "minutes": 2},
             )
             response_json = (
-                json.loads(result[0].text) if result and result[0].text else {}
+                json.loads(result.content[0].text) if result and result.content[0].text else {}
             )
             print(
                 f"List executions response (attempt {retry_count + 1}):", response_json
@@ -445,7 +445,7 @@ async def test_execute_flow_with_subflow():  # TODO
             "manage_executions",
             {"action": "kill", "execution_id": parent_execution_id, "cascade": False},
         )
-        response_json = json.loads(result[0].text) if result and result[0].text else {}
+        response_json = json.loads(result.content[0].text) if result and result.content[0].text else {}
         print("Kill parent execution response:", response_json)
         assert response_json["executionId"] == parent_execution_id
         assert response_json["status"] in ["kill_requested", "already_finished"]
@@ -467,7 +467,7 @@ async def test_execute_flow_with_subflow():  # TODO
         result = await client.call_tool(
             "manage_executions", {"action": "get", "execution_id": subflow_execution_id}
         )
-        response_json = json.loads(result[0].text) if result and result[0].text else {}
+        response_json = json.loads(result.content[0].text) if result and result.content[0].text else {}
         print("Get subflow execution response:", response_json)
         # The subflow execution should be in a non-terminal state
         assert response_json["state"]["current"] not in [
@@ -493,7 +493,7 @@ async def test_delete_execution():
             "execute_flow",
             {"namespace": namespace, "flow_id": flow_id},
         )
-        response_json = json.loads(result[0].text) if result and result[0].text else {}
+        response_json = json.loads(result.content[0].text) if result and result.content[0].text else {}
         print("Execute flow response:", response_json)
         execution_id = response_json["id"]
 
@@ -506,7 +506,7 @@ async def test_delete_execution():
         result = await client.call_tool(
             "manage_executions", {"action": "delete", "execution_id": execution_id}
         )
-        response_json = json.loads(result[0].text) if result and result[0].text else {}
+        response_json = json.loads(result.content[0].text) if result and result.content[0].text else {}
         print("Delete execution response:", response_json)
 
         # Verify execution was deleted by attempting to get it
