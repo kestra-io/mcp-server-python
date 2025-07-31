@@ -25,7 +25,7 @@ async def test_restart_execution():
         first_execution = await client.call_tool(
             "execute_flow", {"namespace": "company.team", "flow_id": "failure"}
         )
-        first_execution_json = json.loads(first_execution[0].text)
+        first_execution_json = json.loads(first_execution.content[0].text)
         first_execution_id = first_execution_json["id"]
         print(f"First execution response: {json.dumps(first_execution_json, indent=2)}")
         assert first_execution_json["flowId"] == "failure"
@@ -35,7 +35,7 @@ async def test_restart_execution():
         second_execution = await client.call_tool(
             "execute_flow", {"namespace": "company.team", "flow_id": "failure"}
         )
-        second_execution_json = json.loads(second_execution[0].text)
+        second_execution_json = json.loads(second_execution.content[0].text)
         second_execution_id = second_execution_json["id"]
         print(
             f"Second execution response: {json.dumps(second_execution_json, indent=2)}"
@@ -58,7 +58,7 @@ async def test_restart_execution():
         restart_result = await client.call_tool(
             "restart_execution", {"namespace": "company.team", "flow_id": "failure"}
         )
-        restart_json = json.loads(restart_result[0].text)
+        restart_json = json.loads(restart_result.content[0].text)
         print(f"Restart result: {json.dumps(restart_json, indent=2)}")
         restarted_execution_id = restart_json["id"]
 
@@ -76,7 +76,7 @@ async def test_restart_execution():
         get_execution = await client.call_tool(
             "manage_executions", {"action": "get", "execution_id": first_execution_id}
         )
-        get_execution_json = json.loads(get_execution[0].text)
+        get_execution_json = json.loads(get_execution.content[0].text)
         assert get_execution_json["state"]["current"] == "FAILED"
 
         # Now restart the first execution again
@@ -88,7 +88,7 @@ async def test_restart_execution():
                 "execution_id": first_execution_id,
             },
         )
-        restart_json = json.loads(restart_result[0].text)
+        restart_json = json.loads(restart_result.content[0].text)
         print(f"Restart first execution result: {json.dumps(restart_json, indent=2)}")
         assert "id" in restart_json
         assert "state" in restart_json
@@ -104,7 +104,7 @@ async def test_restart_from_failed_task():
         execution = await client.call_tool(
             "execute_flow", {"namespace": "company.team", "flow_id": "failure"}
         )
-        execution_json = json.loads(execution[0].text)
+        execution_json = json.loads(execution.content[0].text)
         execution_id = execution_json["id"]
         print(f"Execution response: {json.dumps(execution_json, indent=2)}")
 
@@ -115,7 +115,7 @@ async def test_restart_from_failed_task():
         restart_result = await client.call_tool(
             "change_taskrun_state", {"execution_id": execution_id}
         )
-        restart_json = json.loads(restart_result[0].text)
+        restart_json = json.loads(restart_result.content[0].text)
         print(f"Restart from failed task result: {json.dumps(restart_json, indent=2)}")
         assert restart_json["id"] == execution_id  # Same execution, different state
 
@@ -129,7 +129,7 @@ async def test_change_taskrun_state():
         execution = await client.call_tool(
             "execute_flow", {"namespace": "company.team", "flow_id": "failure"}
         )
-        execution_json = json.loads(execution[0].text)
+        execution_json = json.loads(execution.content[0].text)
         execution_id = execution_json["id"]
         print(f"Execution response: {json.dumps(execution_json, indent=2)}")
 
@@ -140,7 +140,7 @@ async def test_change_taskrun_state():
         change_result = await client.call_tool(
             "change_taskrun_state", {"execution_id": execution_id, "state": "WARNING"}
         )
-        change_json = json.loads(change_result[0].text)
+        change_json = json.loads(change_result.content[0].text)
         print(f"Change task state result: {json.dumps(change_json, indent=2)}")
         assert change_json["id"] == execution_id
 

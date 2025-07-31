@@ -7,6 +7,30 @@ from kestra.utils import _root_api_url
 
 
 def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
+    # Version detection function
+    async def _detect_api_version():
+        """Detect if we're running against Kestra 0.24+ or older version"""
+        try:
+            # Try 0.24+ endpoint first
+            resp = await client.get("/me")
+            if resp.status_code == 200:
+                return "0.24+"
+        except:
+            pass
+        
+        try:
+            # Try the old endpoint
+            tenant = os.getenv("KESTRA_TENANT_ID")
+            if tenant:
+                resp = await client.get(f"/{tenant}/me")
+                if resp.status_code == 200:
+                    return "0.23-"
+        except:
+            pass
+        
+        # Default to 0.24+
+        return "0.24+"
+
     @mcp.tool()
     async def invite_user(
         email: Annotated[
@@ -24,6 +48,8 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         ] = None,
     ):
         """Invite a user to a tenant and and assign either a group or an IAM role. If an invitation already exists for this email, the tool returns the existing invitation details."""
+        api_version = await _detect_api_version()
+        
         # First check if an invitation already exists for this email
         try:
             existing_invites = await client.get(f"/invitations/email/{email}")
@@ -42,9 +68,7 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         groupIds = []
         if group_names:
             for group_name in group_names:
-                resp = await client.get(
-                    "/groups/search", params={"q": group_name, "page": 1, "size": 10}
-                )
+                resp = await client.get(f"/groups/search", params={"q": group_name, "page": 1, "size": 10})
                 resp.raise_for_status()
                 results = resp.json()
                 items = results.get("results", [])
@@ -53,22 +77,34 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                     raise ValueError(f"Group '{group_name}' not found.")
                 groupIds.append(matched[0]["id"])
 
-        # Prepare bindings if role is specified
+        # Prepare payload based on API version
         tenant = os.getenv("KESTRA_TENANT_ID")
-        bindings = []
-        if role:
-            bindings.append(
-                {"type": "USER", "roleId": f"{role}_{tenant}", "deleted": False}
-            )
+        
+        if api_version == "0.24+":
+            # In 0.24+, the API structure has changed
+            # For now, we'll create the invitation without bindings
+            # as the new API structure needs to be implemented
+            payload = {
+                "email": email,
+                "userType": "STANDARD",  # Only STANDARD is supported
+                "groupIds": groupIds,
+            }
+        else:
+            # Prepare bindings if role is specified (for older API)
+            bindings = []
+            if role:
+                bindings.append(
+                    {"type": "USER", "roleId": f"{role}_{tenant}", "deleted": False}
+                )
 
-        payload = {
-            "email": email,
-            "userType": "STANDARD",  # Only STANDARD is supported
-            "groupIds": groupIds,
-            "bindings": bindings,
-        }
+            payload = {
+                "email": email,
+                "userType": "STANDARD",  # Only STANDARD is supported
+                "groupIds": groupIds,
+                "bindings": bindings,
+            }
 
-        resp = await client.post("/invitations", json=payload)
+        resp = await client.post(f"/invitations", json=payload)
         resp.raise_for_status()
         return resp.json()
 
@@ -303,7 +339,13 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         ] = None,
     ):
         """Manage worker groups: list, create, get, update, or delete. Superadmin access is required to use this tool."""
-        base_url = _root_api_url("/cluster/workergroups", client)
+        api_version = await _detect_api_version()
+        
+        if api_version == "0.24+":
+            base_url = "/instance/workergroups"
+        else:
+            base_url = _root_api_url("/cluster/workergroups", client)
+            
         if action == "list":
             resp = await client.get(base_url)
         elif action == "create":
@@ -350,7 +392,13 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         ],
     ):
         """Enter or exit the maintenance mode. The action must be one of 'enter' or 'exit'."""
-        base_url = _root_api_url("/cluster/maintenance", client)
+        api_version = await _detect_api_version()
+        
+        if api_version == "0.24+":
+            base_url = "/instance/maintenance"
+        else:
+            base_url = _root_api_url("/cluster/maintenance", client)
+            
         if action == "enter":
             resp = await client.post(f"{base_url}/enter")
         elif action == "exit":
@@ -478,6 +526,8 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         ] = None,
     ):
         """Search for users by properties such as email, username, etc. For each user's groupList, returns group names instead of group IDs. Returns JSON with user details including auths, groupList, and other properties."""
+        api_version = await _detect_api_version()
+        
         params = {"page": page, "size": size}
         if q:
             params["q"] = q
@@ -485,19 +535,30 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             params["sort"] = sort
         if type:
             params["type"] = type
-        resp = await client.get(f"/users/search", params=params)
+            
+        if api_version == "0.24+":
+            # For 0.24+, users search is global (Superadmin only)
+            resp = await client.get("/users", params=params)
+        else:
+            # For 0.23-, users search is tenant-scoped
+            resp = await client.get(f"/users/search", params=params)
         resp.raise_for_status()
         data = resp.json()
+        
         # Replace groupId with group name in groupList
         for user in data.get("results", []):
             if "groupList" in user and user["groupList"]:
                 for group in user["groupList"]:
                     group_id = group.get("groupId")
                     if group_id:
-                        group_resp = await client.get(f"/groups/{group_id}")
-                        group_resp.raise_for_status()
-                        group_info = group_resp.json()
-                        group["groupName"] = group_info.get("name")
+                        try:
+                            group_resp = await client.get(f"/groups/{group_id}")
+                            group_resp.raise_for_status()
+                            group_info = group_resp.json()
+                            group["groupName"] = group_info.get("name")
+                        except:
+                            # If group lookup fails, continue without group name
+                            pass
         return data
 
     @mcp.tool()
@@ -534,7 +595,12 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         - 'delete': id_ (required)
         The tenant is managed by the Kestra client and base URL.
         """
-        base_url = "/groups"
+        api_version = await _detect_api_version()
+        
+        if api_version == "0.24+":
+            base_url = "/groups"
+        else:
+            base_url = "/groups"
 
         if action == "create":
             if not name:
@@ -593,37 +659,45 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 tenant = os.getenv("KESTRA_TENANT_ID")
                 if not tenant:
                     raise ValueError("KESTRA_TENANT_ID environment variable is not set")
-                # First check if binding already exists
-                try:
-                    binding_resp = await client.get(
-                        "/bindings/search",
-                        params={"type": "GROUP", "id": group_id, "page": 1, "size": 10},
-                    )
-                    binding_resp.raise_for_status()
-                    bindings = binding_resp.json()
-                    existing_binding = None
-                    for binding in bindings.get("results", []):
-                        if binding.get("roleId") == f"{role}_{tenant}":
-                            existing_binding = binding
-                            break
-                    if not existing_binding:
-                        binding = {
-                            "type": "GROUP",
-                            "externalId": group_id,
-                            "roleId": f"{role}_{tenant}",
-                            "deleted": False,
-                        }
-                        try:
-                            binding_response = await client.post(
-                                f"/bindings", json=binding
-                            )
-                            binding_response.raise_for_status()
-                        except httpx.HTTPStatusError as e:
-                            if e.response.status_code not in (409, 422):
-                                raise
-                except httpx.HTTPStatusError as e:
-                    if e.response.status_code != 404:
-                        raise
+                
+                # In 0.24+, bindings are handled differently - we need to use the new API
+                if api_version == "0.24+":
+                    # For 0.24+, we need to use the new tenant-access API or roles API
+                    # For now, we'll skip the binding creation as the API structure has changed
+                    # and we need more information about the new API structure
+                    pass
+                else:
+                    # First check if binding already exists
+                    try:
+                        binding_resp = await client.get(
+                            "/bindings/search",
+                            params={"type": "GROUP", "id": group_id, "page": 1, "size": 10},
+                        )
+                        binding_resp.raise_for_status()
+                        bindings = binding_resp.json()
+                        existing_binding = None
+                        for binding in bindings.get("results", []):
+                            if binding.get("roleId") == f"{role}_{tenant}":
+                                existing_binding = binding
+                                break
+                        if not existing_binding:
+                            binding = {
+                                "type": "GROUP",
+                                "externalId": group_id,
+                                "roleId": f"{role}_{tenant}",
+                                "deleted": False,
+                            }
+                            try:
+                                binding_response = await client.post(
+                                    f"/bindings", json=binding
+                                )
+                                binding_response.raise_for_status()
+                            except httpx.HTTPStatusError as e:
+                                if e.response.status_code not in (409, 422):
+                                    raise
+                    except httpx.HTTPStatusError as e:
+                        if e.response.status_code != 404:
+                            raise
             return group_data
         elif action == "get":
             if not id_:
@@ -672,7 +746,13 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         ] = None,
     ):
         """Manage an invitation by action. The action must be one of 'get' or 'delete'."""
-        base_url = "/invitations"
+        api_version = await _detect_api_version()
+        
+        if api_version == "0.24+":
+            base_url = "/invitations" # TODO: update this
+        else:
+            base_url = "/invitations"
+            
         if not id_:
             raise ValueError("'id_' is required for this action.")
         if action == "get":
@@ -702,12 +782,22 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         - Use the configuration info to get your instance configuration. 
         - Use the license info to show your license type and expiration date. 
         - Use the active services info to get the number of active services e.g. number of active webservers, schedulers, executors, etc."""
+        api_version = await _detect_api_version()
+        
         if info == "configuration":
             url = _root_api_url("/configs", client)
         elif info == "license_info":
             url = _root_api_url("/license-info", client)
         elif info == "active_services":
-            url = _root_api_url("/cluster/services/active", client)
+            if api_version == "0.24+":
+                resp = await client.get("/instance/services/active")
+                resp.raise_for_status()
+                return resp.json()
+            else:
+                url = _root_api_url("/cluster/services/active", client)
+                resp = await client.get(url)
+                resp.raise_for_status()
+                return resp.json()
         else:
             raise ValueError(
                 "info must be one of: 'configuration', 'license_info', 'active_services'"

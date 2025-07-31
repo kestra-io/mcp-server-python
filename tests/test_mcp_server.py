@@ -63,6 +63,7 @@ async def test_list_tools():
             "list_flows_with_triggers",
             "create_flow_from_yaml",
             "manage_flow",
+            "generate_flow",
             "manage_kv_store",
             "list_namespaces",
             "list_flows_in_namespace",

@@ -24,7 +24,7 @@ async def test_resume_flow_with_pause_task():
         first_execution = await client.call_tool(
             "execute_flow", {"namespace": "company.team", "flow_id": "pause_demo"}
         )
-        first_execution_json = json.loads(first_execution[0].text)
+        first_execution_json = json.loads(first_execution.content[0].text)
         first_execution_id = first_execution_json["id"]
         print(f"First execution response: {json.dumps(first_execution_json, indent=2)}")
 
@@ -32,7 +32,7 @@ async def test_resume_flow_with_pause_task():
         second_execution = await client.call_tool(
             "execute_flow", {"namespace": "company.team", "flow_id": "pause_demo"}
         )
-        second_execution_json = json.loads(second_execution[0].text)
+        second_execution_json = json.loads(second_execution.content[0].text)
         second_execution_id = second_execution_json["id"]
         print(
             f"Second execution response: {json.dumps(second_execution_json, indent=2)}"
@@ -57,7 +57,7 @@ async def test_resume_flow_with_pause_task():
         resume_result = await client.call_tool(
             "resume_execution", {"execution_ids": [first_execution_id]}
         )
-        resume_json = json.loads(resume_result[0].text)
+        resume_json = json.loads(resume_result.content[0].text)
         print(f"Resume first execution result: {json.dumps(resume_json, indent=2)}")
         assert "count" in resume_json
 
@@ -65,7 +65,7 @@ async def test_resume_flow_with_pause_task():
         resume_result = await client.call_tool(
             "resume_execution", {"namespace": "company.team", "flow_id": "pause_demo"}
         )
-        resume_json = json.loads(resume_result[0].text)
+        resume_json = json.loads(resume_result.content[0].text)
         print(f"Resume latest execution result: {json.dumps(resume_json, indent=2)}")
         assert isinstance(resume_json, dict)
 
@@ -83,7 +83,7 @@ async def test_resume_flow_with_on_resume_inputs():
         first_execution = await client.call_tool(
             "execute_flow", {"namespace": "company.team", "flow_id": "approval"}
         )
-        first_execution_json = json.loads(first_execution[0].text)
+        first_execution_json = json.loads(first_execution.content[0].text)
         first_execution_id = first_execution_json["id"]
         print(f"First execution response: {json.dumps(first_execution_json, indent=2)}")
 
@@ -91,7 +91,7 @@ async def test_resume_flow_with_on_resume_inputs():
         second_execution = await client.call_tool(
             "execute_flow", {"namespace": "company.team", "flow_id": "approval"}
         )
-        second_execution_json = json.loads(second_execution[0].text)
+        second_execution_json = json.loads(second_execution.content[0].text)
         second_execution_id = second_execution_json["id"]
         print(
             f"Second execution response: {json.dumps(second_execution_json, indent=2)}"
@@ -117,7 +117,7 @@ async def test_resume_flow_with_on_resume_inputs():
         resume_result = await client.call_tool(
             "resume_execution", {"namespace": "company.team", "flow_id": "approval"}
         )
-        resume_json = json.loads(resume_result[0].text)
+        resume_json = json.loads(resume_result.content[0].text)
         print(f"Resume latest execution result: {json.dumps(resume_json, indent=2)}")
         assert isinstance(resume_json, dict)
 
@@ -129,7 +129,7 @@ async def test_resume_flow_with_on_resume_inputs():
                 "on_resume": {"reason": "no more PTO available"},
             },
         )
-        resume_json = json.loads(resume_result[0].text)
+        resume_json = json.loads(resume_result.content[0].text)
         print(f"Resume with custom reason result: {json.dumps(resume_json, indent=2)}")
         assert isinstance(resume_json, dict)
 
