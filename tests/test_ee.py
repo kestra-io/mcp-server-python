@@ -798,20 +798,20 @@ async def test_invite_users():
         assert response_json["email"] == "test@kestra.io"
         assert "status" in response_json
         assert response_json["status"] == "PENDING"
-        # userType field is optional in current API
+        # userType field is optional in 0.24 and higher   
         if "userType" in response_json:
             assert response_json["userType"] == "STANDARD"
         assert "link" in response_json
         assert "sentAt" in response_json
         assert "expiredAt" in response_json
-        # deleted and isExpired fields are optional in current API
+        # deleted and isExpired fields are optional in 0.24 and higher
         if "deleted" in response_json:
             assert isinstance(response_json["deleted"], bool)
         if "isExpired" in response_json:
             assert isinstance(response_json["isExpired"], bool)
         assert "superAdmin" in response_json
         assert "tenantId" in response_json
-        # API uses "groups" instead of "groupIds" in current version
+        # API uses "groups" instead of "groupIds" in 0.24 and higher
         assert ("groupIds" in response_json) or ("groups" in response_json)
         groups_field = "groupIds" if "groupIds" in response_json else "groups"
         assert isinstance(response_json[groups_field], list)
@@ -833,7 +833,7 @@ async def test_invite_users():
         )
         response_json = json.loads(result.content[0].text)
         print(f"Role invitation response: {json.dumps(response_json, indent=2)}")
-        # API uses "roles" instead of "bindings" in current version
+        # API uses "roles" instead of "bindings" in 0.24 and higher
         assert ("bindings" in response_json) or ("roles" in response_json)
         bindings_field = "bindings" if "bindings" in response_json else "roles"
         # Role assignment may not work in all test environments (enterprise feature)
@@ -871,7 +871,7 @@ async def test_invite_users():
             print(f"Third invitation response: {json.dumps(response_json, indent=2)}")
             assert response_json["email"] == "test3@kestra.io"
             assert response_json["status"] == "PENDING"
-            # API uses "groups" instead of "groupIds" in current version
+            # API uses "groups" instead of "groupIds" in 0.24 and higher
             assert ("groupIds" in response_json) or ("groups" in response_json)
             groups_field = "groupIds" if "groupIds" in response_json else "groups"
             # Group assignment may not work in all test environments (enterprise feature)
@@ -901,7 +901,7 @@ async def test_invite_users():
             print(
                 f"Combined invitation response: {json.dumps(response_json, indent=2)}"
             )
-            # API uses "groups" instead of "groupIds" in current version  
+            # API uses "groups" instead of "groupIds" in 0.24 and higher
             assert ("groupIds" in response_json) or ("groups" in response_json)
             groups_field = "groupIds" if "groupIds" in response_json else "groups"
             # Combined role/group assignment may not work in test environment (enterprise feature)
@@ -1038,7 +1038,7 @@ async def test_configuration():
             response_json["environment"]["name"], str
         )
         assert "url" in response_json and isinstance(response_json["url"], str)
-        # isBasicAuthEnabled field is optional in current API
+        # isBasicAuthEnabled field is optional in 0.24 and higher
         if "isBasicAuthEnabled" in response_json:
             assert isinstance(response_json["isBasicAuthEnabled"], bool)
         assert "systemNamespace" in response_json and isinstance(
