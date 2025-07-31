@@ -798,7 +798,7 @@ async def test_invite_users():
         assert response_json["email"] == "test@kestra.io"
         assert "status" in response_json
         assert response_json["status"] == "PENDING"
-        # userType field is optional in current API
+        # userType field is optional in 0.24 and higher   
         if "userType" in response_json:
             assert response_json["userType"] == "STANDARD"
         assert "link" in response_json
