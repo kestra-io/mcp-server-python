@@ -8,11 +8,13 @@ mcp_server_config = {
         "kestraPython": {
             "command": "uv",
             "args": [
-                "--directory",
-                "src",
                 "run",
-                "server.py",
+                "src/server.py",
             ],
+            "cwd": ".",
+            "env": {
+                "PYTHONPATH": "."
+            }
         }
     }
 }

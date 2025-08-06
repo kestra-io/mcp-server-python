@@ -306,114 +306,6 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         return resp.json()
 
     @mcp.tool()
-    async def manage_worker_groups(
-        action: Annotated[
-            Literal["list", "create", "get", "update", "delete"],
-            Field(
-                description="The action to perform: list, create, get, update, delete"
-            ),
-        ],
-        id_: Annotated[
-            str,
-            Field(
-                description="The worker group ID. Required for get, update, delete actions."
-            ),
-        ] = None,
-        key: Annotated[
-            str,
-            Field(
-                description="The worker group key. Required for create and update actions."
-            ),
-        ] = None,
-        description: Annotated[
-            str,
-            Field(
-                description="The worker group description. Required for create and update actions."
-            ),
-        ] = None,
-        allowedTenants: Annotated[
-            list,
-            Field(
-                description="The list of allowed tenants. If not provided, all tenants can use this worker group."
-            ),
-        ] = None,
-    ):
-        """Manage worker groups: list, create, get, update, or delete. Superadmin access is required to use this tool."""
-        api_version = await _detect_api_version()
-        
-        if api_version == "0.24+":
-            base_url = "/instance/workergroups"
-        else:
-            base_url = _root_api_url("/cluster/workergroups", client)
-            
-        if action == "list":
-            resp = await client.get(base_url)
-        elif action == "create":
-            if not (key and description):
-                raise ValueError(
-                    "'key' and 'description' are required for create action."
-                )
-            data = {"key": key, "description": description}
-            if allowedTenants is not None:
-                data["allowedTenants"] = allowedTenants
-            resp = await client.post(base_url, json=data)
-        elif action == "update":
-            if not (id_ and key and description):
-                raise ValueError(
-                    "'id_', 'key', and 'description' are required for update action."
-                )
-            data = {"key": key, "description": description}
-            if allowedTenants is not None:
-                data["allowedTenants"] = allowedTenants
-            resp = await client.put(f"{base_url}/{id_}", json=data)
-        elif action == "get":
-            if not id_:
-                raise ValueError("'id_' is required for get action.")
-            resp = await client.get(f"{base_url}/{id_}")
-        elif action == "delete":
-            if not id_:
-                raise ValueError("'id_' is required for delete action.")
-            resp = await client.delete(f"{base_url}/{id_}")
-        else:
-            raise ValueError("Action must be one of: list, create, get, update, delete")
-        if resp.status_code in (200, 204):
-            try:
-                return resp.json()
-            except Exception:
-                return {}
-        resp.raise_for_status()
-        return resp.json()
-
-    @mcp.tool()
-    async def manage_maintenance_mode(
-        action: Annotated[
-            Literal["enter", "exit"],
-            Field(description="The action to perform: enter, exit"),
-        ],
-    ):
-        """Enter or exit the maintenance mode. The action must be one of 'enter' or 'exit'."""
-        api_version = await _detect_api_version()
-        
-        if api_version == "0.24+":
-            base_url = "/instance/maintenance"
-        else:
-            base_url = _root_api_url("/cluster/maintenance", client)
-            
-        if action == "enter":
-            resp = await client.post(f"{base_url}/enter")
-        elif action == "exit":
-            resp = await client.post(f"{base_url}/exit")
-        else:
-            raise ValueError("Action must be 'enter' or 'exit'")
-        if resp.status_code in (200, 204):
-            try:
-                return resp.json()
-            except Exception:
-                return {}
-        resp.raise_for_status()
-        return resp.json()
-
-    @mcp.tool()
     async def manage_announcements(
         action: Annotated[
             Literal["list", "create", "update", "delete"],
@@ -506,60 +398,6 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 return {}
         resp.raise_for_status()
         return resp.json()
-
-    @mcp.tool()
-    async def search_users(
-        q: Annotated[
-            str, Field(description="An optional string filter for a full-text search.")
-        ] = None,
-        page: Annotated[
-            int, Field(description="The page number to return. Default is 1.")
-        ] = 1,
-        size: Annotated[
-            int,
-            Field(description="The number of items to return per page. Default is 10."),
-        ] = 10,
-        sort: Annotated[list, Field(description="The list of sort fields.")] = None,
-        type: Annotated[
-            Literal["STANDARD", "SERVICE_ACCOUNT", "SUPER_ADMIN"],
-            Field(description="The type of user to filter by."),
-        ] = None,
-    ):
-        """Search for users by properties such as email, username, etc. For each user's groupList, returns group names instead of group IDs. Returns JSON with user details including auths, groupList, and other properties."""
-        api_version = await _detect_api_version()
-        
-        params = {"page": page, "size": size}
-        if q:
-            params["q"] = q
-        if sort:
-            params["sort"] = sort
-        if type:
-            params["type"] = type
-            
-        if api_version == "0.24+":
-            # For 0.24+, users search is global (Superadmin only)
-            resp = await client.get("/users", params=params)
-        else:
-            # For 0.23-, users search is tenant-scoped
-            resp = await client.get(f"/users/search", params=params)
-        resp.raise_for_status()
-        data = resp.json()
-        
-        # Replace groupId with group name in groupList
-        for user in data.get("results", []):
-            if "groupList" in user and user["groupList"]:
-                for group in user["groupList"]:
-                    group_id = group.get("groupId")
-                    if group_id:
-                        try:
-                            group_resp = await client.get(f"/groups/{group_id}")
-                            group_resp.raise_for_status()
-                            group_info = group_resp.json()
-                            group["groupName"] = group_info.get("name")
-                        except:
-                            # If group lookup fails, continue without group name
-                            pass
-        return data
 
     @mcp.tool()
     async def manage_group(
@@ -774,33 +612,22 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
     @mcp.tool()
     async def get_instance_info(
         info: Annotated[
-            Literal["configuration", "license_info", "active_services"],
+            Literal["configuration", "license_info"],
             Field(description="The type of instance info to get"),
         ] = "configuration",
     ):
-        """Get instance metadata: configuration (default), license info, or active services. 
+        """Get instance metadata: configuration (default) or license info. 
         - Use the configuration info to get your instance configuration. 
-        - Use the license info to show your license type and expiration date. 
-        - Use the active services info to get the number of active services e.g. number of active webservers, schedulers, executors, etc."""
+        - Use the license info to show your license type and expiration date."""
         api_version = await _detect_api_version()
         
         if info == "configuration":
             url = _root_api_url("/configs", client)
         elif info == "license_info":
             url = _root_api_url("/license-info", client)
-        elif info == "active_services":
-            if api_version == "0.24+":
-                resp = await client.get("/instance/services/active")
-                resp.raise_for_status()
-                return resp.json()
-            else:
-                url = _root_api_url("/cluster/services/active", client)
-                resp = await client.get(url)
-                resp.raise_for_status()
-                return resp.json()
         else:
             raise ValueError(
-                "info must be one of: 'configuration', 'license_info', 'active_services'"
+                "info must be one of: 'configuration', 'license_info'"
             )
         resp = await client.get(url)
         resp.raise_for_status()
