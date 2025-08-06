@@ -5,235 +5,24 @@ import json
 from pathlib import Path
 from test_utils import mcp_server_config, create_flow, create_test, create_app
 import time
+import os
 
 
-load_dotenv(dotenv_path=Path(__file__).parent.parent.parent / ".env", override=True)
+load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env", override=True)
+
+# Check if EE tools are disabled
+DISABLED_TOOLS = os.getenv("KESTRA_MCP_DISABLED_TOOLS", "").split(",")
+DISABLED_TOOLS = [tool.strip() for tool in DISABLED_TOOLS if tool.strip()]
+EE_TOOLS_DISABLED = "ee" in DISABLED_TOOLS
 
 
-@pytest.mark.skip(reason="The /instance/maintenance/enter endpoint returns 401 Unauthorized due to 0.24 changes")
-@pytest.mark.asyncio
-async def test_manage_maintenance_mode():
-    """Test managing maintenance mode with different actions."""
-    async with Client(mcp_server_config) as client:
-        # Test case 1: Enter maintenance mode
-        result = await client.call_tool("manage_maintenance_mode", {"action": "enter"})
-        response_json = json.loads(result.content[0].text)
-        print("Enter maintenance mode response:", response_json)
 
-        # Verify enter response is an empty dictionary
-        assert response_json == {}
-
-        # Test case 2: Exit maintenance mode
-        result = await client.call_tool("manage_maintenance_mode", {"action": "exit"})
-        response_json = json.loads(result.content[0].text)
-        print("Exit maintenance mode response:", response_json)
-
-        # Verify exit response is an empty dictionary
-        assert response_json == {}
-
-        # Test case 3: Error - invalid action
-        with pytest.raises(Exception):
-            await client.call_tool(
-                "manage_maintenance_mode", {"action": "invalid_action"}
-            )
-
-        # Test case 4: Error - missing action
-        with pytest.raises(Exception):
-            await client.call_tool("manage_maintenance_mode", {})
-
-
-@pytest.mark.skip(reason="The /users endpoint returns 401 Unauthorized due to 0.24 changes")
-@pytest.mark.asyncio
-async def test_search_users():
-    """Test searching users with different filters."""
-    async with Client(mcp_server_config) as client:
-        # Test case 1: Search users by email
-        result = await client.call_tool(
-            "search_users", {"q": "test@kestra.io", "page": 1, "size": 10}
-        )
-        response_json = json.loads(result.content[0].text)
-        print("Search users response:", response_json)
-
-        # Verify response structure
-        assert "results" in response_json
-        assert "total" in response_json
-        assert isinstance(response_json["results"], list)
-
-        # Test case 2: Search users by type
-        result = await client.call_tool(
-            "search_users", {"type": "STANDARD", "page": 1, "size": 10}
-        )
-        response_json = json.loads(result.content[0].text)
-        print("Search users by type response:", response_json)
-
-        # Verify response structure and type filter
-        assert "results" in response_json
-        assert "total" in response_json
-        assert isinstance(response_json["results"], list)
-        for user in response_json["results"]:
-            assert user["type"] == "STANDARD"
-
-        # Test case 3: Search with pagination
-        result = await client.call_tool("search_users", {"page": 1, "size": 2})
-        response_json = json.loads(result.content[0].text)
-        print("Search users with pagination response:", response_json)
-
-        # Verify pagination
-        assert "results" in response_json
-        assert "total" in response_json
-        assert len(response_json["results"]) <= 2  # Should not exceed page size
-
-        # Test case 4: Search with sort
-        result = await client.call_tool(
-            "search_users", {"sort": ["username:asc"], "page": 1, "size": 10}
-        )
-        response_json = json.loads(result.content[0].text)
-        print("Search users with sort response:", response_json)
-
-        # Verify response structure
-        assert "results" in response_json
-        assert "total" in response_json
-        assert isinstance(response_json["results"], list)
-
-        # Test case 5: Error - invalid type
-        with pytest.raises(Exception):
-            await client.call_tool(
-                "search_users", {"type": "INVALID_TYPE", "page": 1, "size": 10}
-            )
-
-
-@pytest.mark.skip(reason="Endpoint /instance/workergroups returns 401 Unauthorized due to 0.24 changes")
-@pytest.mark.asyncio
-async def test_manage_worker_groups():
-    """Test managing worker groups with different actions."""
-    async with Client(mcp_server_config) as client:
-        # First check if test worker groups exist and delete them
-        result = await client.call_tool("manage_worker_groups", {"action": "list"})
-        response_json = json.loads(result.content[0].text)
-        print("List worker groups response:", response_json)
-
-        # Delete any existing test worker groups
-        for worker_group in response_json["workerGroups"]:
-            if worker_group["key"].startswith("test_worker"):
-                await client.call_tool(
-                    "manage_worker_groups",
-                    {"action": "delete", "id_": worker_group["id"]},
-                )
-
-        # Verify list response structure
-        assert "workerGroups" in response_json
-        assert isinstance(response_json["workerGroups"], list)
-
-        # If there are any worker groups, verify their structure
-        if response_json["workerGroups"]:
-            worker_group = response_json["workerGroups"][0]
-            assert "id" in worker_group
-            assert "key" in worker_group
-            assert "description" in worker_group
-            assert "activeWorkers" in worker_group
-            assert isinstance(worker_group["activeWorkers"], int)
-
-        # Test case 2: Create a new worker group with unique key
-        unique_key = (
-            f"test_worker_{int(time.time())}"  # Use timestamp to ensure uniqueness
-        )
-        result = await client.call_tool(
-            "manage_worker_groups",
-            {
-                "action": "create",
-                "key": unique_key,
-                "description": "Test worker group for unit tests",
-            },
-        )
-        response_json = json.loads(result.content[0].text)
-        print("Create worker group response:", response_json)
-
-        # Verify create response structure
-        assert "id" in response_json
-        assert "key" in response_json
-        assert response_json["key"] == unique_key
-        assert "description" in response_json
-        assert response_json["description"] == "Test worker group for unit tests"
-        assert "allowedTenants" in response_json
-        assert isinstance(response_json["allowedTenants"], list)
-
-        worker_group_id = response_json["id"]
-
-        # Test case 3: Get worker group details
-        result = await client.call_tool(
-            "manage_worker_groups", {"action": "get", "id_": worker_group_id}
-        )
-        response_json = json.loads(result.content[0].text)
-        print("Get worker group response:", response_json)
-
-        # Verify get response structure
-        assert "id" in response_json
-        assert response_json["id"] == worker_group_id
-        assert "key" in response_json
-        assert response_json["key"] == unique_key
-        assert "description" in response_json
-        assert response_json["description"] == "Test worker group for unit tests"
-        assert "allowedTenants" in response_json
-        assert isinstance(response_json["allowedTenants"], list)
-        assert "workers" in response_json
-        assert isinstance(response_json["workers"], list)
-
-        # Test case 4: Update worker group - only update description and allowedTenants
-        result = await client.call_tool(
-            "manage_worker_groups",
-            {
-                "action": "update",
-                "id_": worker_group_id,
-                "key": unique_key,  # Keep the same key
-                "description": "Updated test worker group",
-                "allowedTenants": ["main"],
-            },
-        )
-        response_json = json.loads(result.content[0].text)
-        print("Update worker group response:", response_json)
-
-        # Verify update response structure
-        assert "id" in response_json
-        assert response_json["id"] == worker_group_id
-        assert "key" in response_json
-        assert response_json["key"] == unique_key  # Key should remain unchanged
-        assert "description" in response_json
-        assert response_json["description"] == "Updated test worker group"
-        assert "allowedTenants" in response_json
-        assert isinstance(response_json["allowedTenants"], list)
-        assert "main" in response_json["allowedTenants"]
-
-        # Test case 5: Delete worker group
-        result = await client.call_tool(
-            "manage_worker_groups", {"action": "delete", "id_": worker_group_id}
-        )
-        response_json = json.loads(result.content[0].text)
-        print("Delete worker group response:", response_json)
-        assert response_json == {}  # Verify empty dictionary response
-
-        # Test case 6: Error - missing required parameters for create
-        with pytest.raises(Exception):
-            await client.call_tool("manage_worker_groups", {"action": "create"})
-
-        # Test case 7: Error - missing required parameters for update
-        with pytest.raises(Exception):
-            await client.call_tool("manage_worker_groups", {"action": "update"})
-
-        # Test case 8: Error - missing required parameters for get
-        with pytest.raises(Exception):
-            await client.call_tool("manage_worker_groups", {"action": "get"})
-
-        # Test case 9: Error - missing required parameters for delete
-        with pytest.raises(Exception):
-            await client.call_tool("manage_worker_groups", {"action": "delete"})
-
-        # Test case 10: Error - invalid action
-        with pytest.raises(Exception):
-            await client.call_tool("manage_worker_groups", {"action": "invalid_action"})
 
 @pytest.mark.asyncio
 async def test_manage_tests():
     """Test managing tests with different actions."""
+    if EE_TOOLS_DISABLED:
+        pytest.skip("EE tools are disabled")
     async with Client(mcp_server_config) as client:
         # Test case 1: Create a new test
         await create_flow("healthcheck.yaml", client)
@@ -318,6 +107,8 @@ async def test_manage_tests():
 
 @pytest.mark.asyncio
 async def test_manage_groups():
+    if EE_TOOLS_DISABLED:
+        pytest.skip("EE tools are disabled")
     """Test managing groups with different actions."""
     async with Client(mcp_server_config) as client:
         # 1. Create a group
@@ -391,6 +182,8 @@ async def test_manage_groups():
 
 @pytest.mark.asyncio
 async def test_manage_apps():
+    if EE_TOOLS_DISABLED:
+        pytest.skip("EE tools are disabled")
     """Test managing apps with different actions."""
     async with Client(mcp_server_config) as client:
         # Test case 1: Create a new app
@@ -503,6 +296,8 @@ async def test_manage_apps():
 
 @pytest.mark.asyncio
 async def test_search_apps():
+    if EE_TOOLS_DISABLED:
+        pytest.skip("EE tools are disabled")
     """Test searching for apps with different parameters."""
     async with Client(mcp_server_config) as client:
         # First check if app exists and delete it if it does
@@ -617,6 +412,8 @@ async def test_search_apps():
 
 @pytest.mark.asyncio
 async def test_manage_announcements():
+    if EE_TOOLS_DISABLED:
+        pytest.skip("EE tools are disabled")
     """Test managing announcements with different actions."""
     async with Client(mcp_server_config) as client:
         # Test case 1a: Create a new announcement with only message
@@ -752,6 +549,8 @@ async def test_manage_announcements():
 
 @pytest.mark.asyncio
 async def test_invite_users():
+    if EE_TOOLS_DISABLED:
+        pytest.skip("EE tools are disabled")
     """Test inviting a user with different scenarios."""
     async with Client(mcp_server_config) as client:
         # Collect invitation ids from responses
@@ -919,6 +718,8 @@ async def test_invite_users():
 
 @pytest.mark.asyncio
 async def test_license_info():
+    if EE_TOOLS_DISABLED:
+        pytest.skip("EE tools are disabled")
     """Response example:
     {'type': 'CUSTOMER', 'expiry': '2030-05-02T00:00:00.000+00:00', 'expired': False}
     """
@@ -930,35 +731,10 @@ async def test_license_info():
         assert "expired" in response_json and isinstance(response_json["expired"], bool)
 
 
-@pytest.mark.skip(reason="Endpoint /instance/services/active returns 401 Unauthorized due to 0.24 changes")
-@pytest.mark.asyncio
-async def test_active_services():
-    async with Client(mcp_server_config) as client:
-        """Response example:
-        {'total': 5, 'services': [{'type': 'WEBSERVER', 'total': 1}, {'type': 'SCHEDULER', 'total': 1}, {'type': 'WORKER', 'total': 1}, {'type': 'EXECUTOR', 'total': 1}, {'type': 'INDEXER', 'total': 1}]}
-        """
-        result = await client.call_tool(
-            "get_instance_info", {"info": "active_services"}
-        )
-        response_json = json.loads(result.content[0].text)
-        assert "total" in response_json and isinstance(response_json["total"], int)
-        assert "services" in response_json and isinstance(
-            response_json["services"], list
-        )
-        for service in response_json["services"]:
-            assert "type" in service and isinstance(service["type"], str)
-            assert service["type"] in [
-                "WEBSERVER",
-                "SCHEDULER",
-                "WORKER",
-                "EXECUTOR",
-                "INDEXER",
-            ]
-            assert "total" in service and isinstance(service["total"], int)
-
-
 @pytest.mark.asyncio
 async def test_configuration():
+    if EE_TOOLS_DISABLED:
+        pytest.skip("EE tools are disabled")
     async with Client(mcp_server_config) as client:
         result = await client.call_tool("get_instance_info", {"info": "configuration"})
         response_json = json.loads(result.content[0].text)
@@ -1032,9 +808,6 @@ async def test_configuration():
 if __name__ == "__main__":
     import asyncio
 
-    asyncio.run(test_search_users())
-    asyncio.run(test_manage_worker_groups())
-    asyncio.run(test_manage_maintenance_mode())
     asyncio.run(test_manage_tests())
     asyncio.run(test_manage_groups())
     asyncio.run(test_manage_apps())
@@ -1042,5 +815,4 @@ if __name__ == "__main__":
     asyncio.run(test_manage_announcements())
     asyncio.run(test_invite_users())
     asyncio.run(test_license_info())
-    asyncio.run(test_active_services())
     asyncio.run(test_configuration())

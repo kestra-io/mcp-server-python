@@ -1,5 +1,5 @@
 """
-uv run pytest src/tests/test_mcp_server.py
+uv run pytest tests/test_mcp_server.py
 
 config = {
   "mcpServers": {
@@ -85,10 +85,7 @@ async def test_list_tools():
             "manage_apps",
             "manage_group",
             "manage_invitations",
-            "manage_maintenance_mode",
-            "manage_tests",
-            "manage_worker_groups",
-            "search_users",
+            "manage_tests"
         }
 
         # Check if EE tools are disabled
