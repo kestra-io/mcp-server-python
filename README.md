@@ -22,12 +22,14 @@ Paste the following configuration into your MCP settings (e.g., Cursor, Claude, 
         "-e", "KESTRA_BASE_URL",
         "-e", "KESTRA_TENANT_ID",
         "-e", "KESTRA_MCP_DISABLED_TOOLS",
+        "-e", "KESTRA_MCP_LOG_LEVEL",
         "ghcr.io/kestra-io/mcp-server-python:latest"
       ],
       "env": {
         "KESTRA_BASE_URL": "http://host.docker.internal:8080/api/v1",
         "KESTRA_TENANT_ID": "main",
-        "KESTRA_MCP_DISABLED_TOOLS": "ee"
+        "KESTRA_MCP_DISABLED_TOOLS": "ee",
+        "KESTRA_MCP_LOG_LEVEL": "ERROR"
       }
     }
   }
@@ -50,6 +52,8 @@ If you enabled Basic Auth, use:
         "-e",
         "KESTRA_MCP_DISABLED_TOOLS",
         "-e",
+        "KESTRA_MCP_LOG_LEVEL",
+        "-e",
         "KESTRA_BASE_URL",
         "-e",
         "KESTRA_TENANT_ID",
@@ -63,6 +67,7 @@ If you enabled Basic Auth, use:
         "KESTRA_BASE_URL": "http://host.docker.internal:8080/api/v1",
         "KESTRA_TENANT_ID": "main",
         "KESTRA_MCP_DISABLED_TOOLS": "ee",
+        "KESTRA_MCP_LOG_LEVEL": "ERROR",
         "KESTRA_USERNAME": "admin@kestra.io",
         "KESTRA_PASSWORD": "your_password"
       }
@@ -88,12 +93,14 @@ If you enabled Basic Auth, use:
         "-e", "KESTRA_API_TOKEN",
         "-e", "KESTRA_TENANT_ID",
         "-e", "KESTRA_MCP_DISABLED_TOOLS",
+        "-e", "KESTRA_MCP_LOG_LEVEL",
         "ghcr.io/kestra-io/mcp-server-python:latest"
       ],
       "env": {
         "KESTRA_BASE_URL": "http://host.docker.internal:8080/api/v1",
         "KESTRA_API_TOKEN": "<your_kestra_api_token>",
-        "KESTRA_TENANT_ID": "main"
+        "KESTRA_TENANT_ID": "main",
+        "KESTRA_MCP_LOG_LEVEL": "ERROR"
       }
     }
   }
@@ -119,6 +126,7 @@ If you enabled Basic Auth, use:
         "-e", "KESTRA_USERNAME",
         "-e", "KESTRA_PASSWORD",
         "-e", "KESTRA_MCP_DISABLED_TOOLS",
+        "-e", "KESTRA_MCP_LOG_LEVEL",
         "ghcr.io/kestra-io/mcp-server-python:latest"
       ],
       "env": {
@@ -127,7 +135,8 @@ If you enabled Basic Auth, use:
         "KESTRA_TENANT_ID": "main",
         "KESTRA_USERNAME": "admin",
         "KESTRA_PASSWORD": "admin",
-        "KESTRA_MCP_DISABLED_TOOLS": "ee"
+        "KESTRA_MCP_DISABLED_TOOLS": "ee",
+        "KESTRA_MCP_LOG_LEVEL": "ERROR"
       }
     }
   }
@@ -168,6 +177,50 @@ To disable multiple tools, separate them with comma:
 
 ```dotenv
 KESTRA_MCP_DISABLED_TOOLS=ee
+```
+
+### Logging Configuration
+
+By default, the MCP server only logs ERROR level messages to minimize noise. You can control the logging level using the `KESTRA_MCP_LOG_LEVEL` environment variable:
+
+```dotenv
+# Only show ERROR messages (default)
+KESTRA_MCP_LOG_LEVEL=ERROR
+
+# Show WARNING and ERROR messages
+KESTRA_MCP_LOG_LEVEL=WARNING
+
+# Show INFO, WARNING, and ERROR messages
+KESTRA_MCP_LOG_LEVEL=INFO
+
+# Show all messages including DEBUG
+KESTRA_MCP_LOG_LEVEL=DEBUG
+```
+
+When using Docker, add the environment variable to your MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "kestra": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--pull",
+        "always",
+        "-e", "KESTRA_BASE_URL",
+        "-e", "KESTRA_MCP_LOG_LEVEL",
+        "ghcr.io/kestra-io/mcp-server-python:latest"
+      ],
+      "env": {
+        "KESTRA_BASE_URL": "http://host.docker.internal:8080/api/v1",
+        "KESTRA_MCP_LOG_LEVEL": "ERROR"
+      }
+    }
+  }
+}
 ```
 
 ---

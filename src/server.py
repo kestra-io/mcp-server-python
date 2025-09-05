@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 import httpx
 from mcp.server.fastmcp import FastMCP
 import os
+import logging
 
 from tools.backfill import register_backfill_tools
 from tools.ee import register_ee_tools
@@ -15,6 +16,20 @@ from tools.replay import register_replay_tools
 from tools.restart import register_restart_tools
 
 load_dotenv()
+
+# Configure logging - default to ERROR level, but allow override via environment
+log_level = os.getenv("KESTRA_MCP_LOG_LEVEL", "ERROR").upper()
+logging.basicConfig(
+    level=getattr(logging, log_level, logging.ERROR),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+# Suppress specific logger noise unless DEBUG level is explicitly set
+if log_level != "DEBUG":
+    logging.getLogger("httpx").setLevel(logging.ERROR)
+    logging.getLogger("httpcore").setLevel(logging.ERROR)
+    logging.getLogger("urllib3").setLevel(logging.ERROR)
+    logging.getLogger("asyncio").setLevel(logging.ERROR)
 
 
 def make_kestra_client() -> httpx.AsyncClient:
