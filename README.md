@@ -2,7 +2,9 @@
 
 You can run the MCP Server in a Docker container. This is useful if you want to avoid managing Python environments or dependencies on your local machine.
 
-### Using 
+### Using Kestra AI Agent
+
+See [kestra_mcp_docker](docs/flows/kestra_mcp_docker.yaml).
 
 ### Minimal configuration for OSS users
 
