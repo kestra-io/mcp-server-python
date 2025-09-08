@@ -1,8 +1,8 @@
 id: mcp_prompt_form
 type: io.kestra.plugin.ee.apps.Execution
-displayName: Form to prompt Kestra
-namespace: company.team
-flowId: ask_mcp
+displayName: Interact with Kestra's AI Agent
+namespace: company.ai
+flowId: kestra_mcp_docker
 access: 
   type: PRIVATE
 tags:
@@ -38,17 +38,19 @@ layout:
           Your prompt was:
 
       - type: io.kestra.plugin.ee.apps.execution.blocks.Inputs
+        filter:
+          include:
+            - prompt
 
-      - type: io.kestra.plugin.ee.apps.core.blocks.Alert
-        style: SUCCESS
-        showIcon: true
-        content: Here's the response!
+      - type: io.kestra.plugin.ee.apps.core.blocks.Markdown
+        content: |
+          Generated response:
 
       - type: io.kestra.plugin.ee.apps.execution.blocks.TaskOutputs
         outputs:
-          - displayName: "Response"
-            type: FILE
-            value: "{{ outputs.run_mcp_server.outputFiles['output.md'] }}"
+          - displayName: AI
+            type: STRING
+            value: "{{ outputs.agent.textOutput }}"
 
       - type: io.kestra.plugin.ee.apps.core.blocks.Button
         text: Submit new request

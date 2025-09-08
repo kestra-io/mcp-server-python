@@ -1,8 +1,8 @@
 ## Kestra Python MCP Server
 
-> **⚠️ Beta Notice:** The Kestra MCP Server is currently in **Beta** and is intended for Kestra `0.23.0` and higher. It may undergo significant changes in the next few releases. API interfaces, tool names, and functionality may change without notice. We recommend testing thoroughly in development environments before using in production.
-
 You can run the MCP Server in a Docker container. This is useful if you want to avoid managing Python environments or dependencies on your local machine.
+
+### Using 
 
 ### Minimal configuration for OSS users
 
@@ -19,44 +19,14 @@ Paste the following configuration into your MCP settings (e.g., Cursor, Claude, 
         "--rm",
         "--pull",
         "always",
-        "-e", "KESTRA_BASE_URL",
-        "-e", "KESTRA_TENANT_ID",
-        "-e", "KESTRA_MCP_DISABLED_TOOLS",
-        "-e", "KESTRA_MCP_LOG_LEVEL",
-        "ghcr.io/kestra-io/mcp-server-python:latest"
-      ],
-      "env": {
-        "KESTRA_BASE_URL": "http://host.docker.internal:8080/api/v1",
-        "KESTRA_TENANT_ID": "main",
-        "KESTRA_MCP_DISABLED_TOOLS": "ee",
-        "KESTRA_MCP_LOG_LEVEL": "ERROR"
-      }
-    }
-  }
-}
-```
-
-If you enabled Basic Auth, use:
-
-```json
-{
-  "mcpServers": {
-    "kestra": {
-      "command": "docker",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "--pull",
-        "always",
-        "-e",
-        "KESTRA_MCP_DISABLED_TOOLS",
-        "-e",
-        "KESTRA_MCP_LOG_LEVEL",
         "-e",
         "KESTRA_BASE_URL",
         "-e",
         "KESTRA_TENANT_ID",
+        "-e",
+        "KESTRA_MCP_DISABLED_TOOLS",
+        "-e",
+        "KESTRA_MCP_LOG_LEVEL",
         "-e",
         "KESTRA_USERNAME",
         "-e",
@@ -92,7 +62,6 @@ If you enabled Basic Auth, use:
         "-e", "KESTRA_BASE_URL",
         "-e", "KESTRA_API_TOKEN",
         "-e", "KESTRA_TENANT_ID",
-        "-e", "KESTRA_MCP_DISABLED_TOOLS",
         "-e", "KESTRA_MCP_LOG_LEVEL",
         "ghcr.io/kestra-io/mcp-server-python:latest"
       ],
@@ -311,62 +280,3 @@ No, you don't have to run the server manually, as when using the `stdio` transpo
 
 No, because we use `uv`. Unlike traditional Python package managers, where virtual environment activation modifies shell variables like `PATH`, `uv` directly uses the Python interpreter and packages from the `.venv` directory without requiring environment variables to be set first. Just make sure you have created a uv virtual environment with `uv venv` and installed the required packages with `uv pip install` as described in the previous section.
 
----
-
-### Using the Kestra MCP Server with Google Agent SDK (ADK)
-
-To launch the [Agent Development UI](https://google.github.io/adk-docs/get-started/quickstart/), run the following commands:
-
-```bash
-source .venv/bin/activate  
-cd agents/
-adk web
-```
-
-Then, select `google-mcp-client` from the agent dropdown and start sending your prompts to interact with Kestra MCP Server.
-
-Best to enable the toggle "Token Streaming" to stream responses as they are generated.
-
-For more information, check the official [adk-python](https://github.com/google/adk-python/) repository. For Java developers, there's an equivalent [adk-java](https://github.com/google/adk-java).
-
----
-
-### Using the Kestra MCP Server with OpenAI Agent SDK
-
-Let's assume we have the following Kestra flows in the `company` namespace:
-
-![img.png](docs/images/ns_deps.png)
-
-You can run the following command from the project root to see all those dependencies visualized as an ASCII graph:
-
-```bash
-uv run agents/openai-mcp-client/agent.py -p 'List dependencies for the namespace company'
-```
-
-You should see a similar output:
-
-```markdown
-Here's the dependency graph for the namespace `company`:
-
-flow1 ────▶ flow2
-            flow2 ────▶ flow3b
-                        flow3b ────▶ flow4
-                                     flow4 ────▶ flow5
-                                                 flow5 ────▶ flow6
-                                                             flow6
-            flow2 ────▶ flow3c
-                        flow3c ────▶ flow4
-                        flow3c ====▶ flow3
-                                     flow3
-            flow2 ────▶ flow3a
-                        flow3a ────▶ flow4
-goodbye
-hello
-scheduled_flow
-
-**Legend:**
-- `────▶` FLOW_TRIGGER  (flow-trigger-based dependency)
-- `====▶` FLOW_TASK     (subflow-task-based dependency)
-
-Flows listed without arrows have no dependencies within this namespace.
-```

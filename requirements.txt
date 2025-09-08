@@ -7,7 +7,3 @@ pydantic==2.11.7
 # for running tests locally, install pytest:
 pytest==8.4.1
 pytest-asyncio==1.1.0
-
-# for running agents using Kestra MCP server: 
-openai-agents==0.2.4
-google-adk==1.8.0

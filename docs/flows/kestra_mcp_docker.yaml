@@ -1,0 +1,50 @@
+id: kestra_mcp_docker
+namespace: company.ai
+
+inputs:
+  - id: prompt
+    type: STRING
+    defaults: List namespaces
+    displayName: Prompt
+    description: Ask what you want to accomplish in Kestra using a natural language prompt
+   
+  - id: override_config
+    type: BOOL
+    displayName: Would you like to override the default configuration?
+    defaults: false
+
+  - id: base_url
+    type: STRING
+    displayName: Kestra Base URL
+    defaults: http://host.docker.internal:28080/api/v1
+    dependsOn:
+      inputs:
+        - override_config
+      condition: "{{ inputs.override_config == true }}"
+
+  - id: tenant_id
+    type: STRING
+    displayName: Adjust to match your Tenant ID
+    defaults: demo
+    dependsOn:
+      inputs:
+        - override_config
+      condition: "{{ inputs.override_config == true }}"
+
+tasks:
+  - id: agent
+    type: io.kestra.plugin.ai.agent.AIAgent
+    prompt: "{{ inputs.prompt }}"
+    systemMessage: Return any output as a simple plain text (separated with commas or newlines depending on the output type). Avoid markdown.
+    provider:
+      type: io.kestra.plugin.ai.provider.GoogleGemini
+      modelName: gemini-2.5-flash
+      apiKey: "{{ kv('GEMINI_API_KEY') }}"
+    tools:
+      - type: io.kestra.plugin.ai.tool.DockerMcpClient
+        image: ghcr.io/kestra-io/mcp-server-python:latest
+        env:
+          KESTRA_BASE_URL: "{{inputs.base_url}}"
+          KESTRA_TENANT_ID: demo
+          KESTRA_USERNAME: anna@kestra.io
+          KESTRA_PASSWORD: "{{ kv('KESTRA_PASSWORD') }}"
