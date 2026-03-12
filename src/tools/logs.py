@@ -1,8 +1,7 @@
 from mcp.server.fastmcp import FastMCP
 import httpx
-from typing import Annotated, List, Literal, Optional
+from typing import Annotated, Any, List, Literal, Optional
 from pydantic import Field
-from datetime import datetime, timezone
 
 
 def register_logs_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
@@ -29,7 +28,7 @@ def register_logs_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             Optional[int],
             Field(description="Filter logs by specific attempt number. Default is None.")
         ] = None,
-    ) -> List[dict]:
+    ) -> list[dict[str, Any]]:
         """Get logs for a specific execution with optional filtering.
         
         Returns a list of log entries in JSON format. Each log entry contains:
