@@ -74,6 +74,13 @@ async def test_list_tools():
             "resume_execution",
             "force_run_execution",
             "manage_executions",
+            # Logs tools
+            "get_execution_logs",
+            "download_execution_logs",
+            "search_logs",
+            "delete_execution_logs",
+            "delete_flow_logs",
+            "follow_execution_logs",
         }
 
         # EE-specific tools

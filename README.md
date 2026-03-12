@@ -131,6 +131,7 @@ Paste the following configuration into your MCP settings (e.g., Cursor, Claude, 
 - 📁 files
 - 🔀 flow
 - 🗝️ kv
+- 📋 logs
 - 🌐 namespace
 - 🔁 replay
 - ♻️ restart

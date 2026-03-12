@@ -10,6 +10,7 @@ from tools.execution import register_execution_tools
 from tools.files import register_files_tools
 from tools.flow import register_flow_tools
 from tools.kv import register_kv_tools
+from tools.logs import register_logs_tools
 from tools.namespace import register_namespace_tools
 from tools.resume import register_resume_tools
 from tools.replay import register_replay_tools
@@ -88,6 +89,8 @@ if "flow" not in DISABLED_TOOLS:
     register_flow_tools(mcp, client)
 if "kv" not in DISABLED_TOOLS:
     register_kv_tools(mcp, client)
+if "logs" not in DISABLED_TOOLS:
+    register_logs_tools(mcp, client)
 if "namespace" not in DISABLED_TOOLS:
     register_namespace_tools(mcp, client)
 if "replay" not in DISABLED_TOOLS:
