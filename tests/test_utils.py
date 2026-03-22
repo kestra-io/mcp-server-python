@@ -20,7 +20,7 @@ mcp_server_config = {
 }
 
 
-async def create_flow(file: str, client: Client) -> dict:
+async def create_flow(file: str, client: Client, cleanup=None) -> dict:
     yaml_path = Path(__file__).parent / "code" / file
     with open(yaml_path, "r") as f:
         yaml_flow = f.read()
@@ -28,10 +28,12 @@ async def create_flow(file: str, client: Client) -> dict:
         "create_flow_from_yaml", {"yaml_definition": yaml_flow}
     )
     response_json = json.loads(result.content[0].text)
+    if cleanup:
+        cleanup.track_flow(response_json["namespace"], response_json["id"])
     return response_json
 
 
-async def create_test(file: str, client: Client) -> dict:
+async def create_test(file: str, client: Client, cleanup=None) -> dict:
     yaml_path = Path(__file__).parent / "code" / file
     with open(yaml_path, "r") as f:
         yaml_source = f.read()
@@ -42,7 +44,7 @@ async def create_test(file: str, client: Client) -> dict:
     return response_json
 
 
-async def create_app(file: str, client: Client) -> dict:
+async def create_app(file: str, client: Client, cleanup=None) -> dict:
     yaml_path = Path(__file__).parent / "code" / file
     with open(yaml_path, "r") as f:
         yaml_source = f.read()
