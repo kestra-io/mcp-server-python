@@ -11,6 +11,40 @@ from kestra.constants import (
 )
 
 
+def _normalize_labels(labels) -> list[dict]:
+    """Normalize labels from any format into list of {"key": ..., "value": ...} dicts.
+
+    Accepts:
+      - dict: {"env": "prod", "team": "data"} → [{"key": "env", "value": "prod"}, ...]
+      - list of "key:value" strings: ["env:prod"] → [{"key": "env", "value": "prod"}]
+      - list of {"key": ..., "value": ...} dicts: passed through as-is
+    """
+    if isinstance(labels, dict):
+        return [{"key": str(k), "value": str(v)} for k, v in labels.items()]
+    if isinstance(labels, list):
+        result = []
+        for item in labels:
+            if isinstance(item, dict) and "key" in item and "value" in item:
+                result.append({"key": str(item["key"]), "value": str(item["value"])})
+            elif isinstance(item, str) and ":" in item:
+                key, _, value = item.partition(":")
+                result.append({"key": key, "value": value})
+            else:
+                raise ValueError(
+                    f"Invalid label format: {item!r}. "
+                    "Labels must be a dict like {\"env\": \"prod\"}, "
+                    "a list of \"key:value\" strings, or a list of "
+                    "{\"key\": ..., \"value\": ...} objects."
+                )
+        return result
+    raise ValueError(
+        f"Invalid labels type: {type(labels).__name__}. "
+        "Labels must be a dict like {\"env\": \"prod\"}, "
+        "a list of \"key:value\" strings, or a list of "
+        "{\"key\": ..., \"value\": ...} objects."
+    )
+
+
 def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
     @mcp.tool()
     async def execute_flow(
@@ -34,9 +68,9 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             ),
         ] = None,
         labels: Annotated[
-            list,
+            dict,
             Field(
-                description="The labels to the flow. Must be provided as a list of 'key:value' strings, e.g. ['project:hogwarts']. Default is an empty list."
+                description="The labels for the execution as a flat dictionary, e.g. {'environment': 'test', 'project': 'hogwarts'}. Default is no labels."
             ),
         ] = None,
         schedule_date: Annotated[
@@ -60,13 +94,8 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         if wait:
             params["wait"] = True
         if labels:
-            # Convert list of dicts with 'key' and 'value' to list of 'key:value' strings
-            if isinstance(labels, list) and all(
-                isinstance(l, dict) and "key" in l and "value" in l for l in labels
-            ):
-                params["labels"] = [f"{l['key']}:{l['value']}" for l in labels]
-            else:
-                params["labels"] = labels
+            normalized = _normalize_labels(labels)
+            params["labels"] = [f"{l['key']}:{l['value']}" for l in normalized]
         if schedule_date:
             params["scheduleDate"] = schedule_date
 
@@ -167,16 +196,14 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             str, Field(description="The execution ID to add labels to")
         ],
         labels: Annotated[
-            list[dict],
+            dict,
             Field(
-                description="The labels to add to the execution. Must be provided as a list of objects with 'key' and 'value' fields."
+                description="The labels to add as a flat dictionary, e.g. {'team': 'datateam', 'replay': 'true'}."
             ),
         ],
     ) -> dict:
         """Add or update labels of a terminated execution. The execution must be in one of the terminal states:
         SUCCESS, WARNING, FAILED, KILLED, CANCELLED, or SKIPPED. Raises a ValueError otherwise.
-
-        Parse any free‑form label text from the user prompt (e.g. "replay:true project:mcp" or "team:datateam") into a list of {"key": ..., "value": ...} objects and pass it here as `labels`.
         """
         get_resp = await client.get(f"/executions/{execution_id}")
         get_resp.raise_for_status()
@@ -191,15 +218,9 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 f"Labels may only be added when execution is in one of: {allowed}."
             )
 
-        if not isinstance(labels, list) or not all(
-            isinstance(l, dict) and "key" in l and "value" in l for l in labels
-        ):
-            raise ValueError(
-                "`labels` must be a list of objects with 'key' and 'value' fields"
-            )
-
+        normalized = _normalize_labels(labels)
         label_map = {lbl["key"]: lbl["value"] for lbl in existing}
-        for l in labels:
+        for l in normalized:
             label_map[l["key"]] = l["value"]
         merged_labels = [{"key": k, "value": v} for k, v in label_map.items()]
 

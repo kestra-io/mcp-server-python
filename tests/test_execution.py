@@ -58,11 +58,11 @@ async def test_execute_flow(kestra_client, cleanup):
         {
             "namespace": namespace,
             "flow_id": flow_id,
-            "labels": [
-                "environment:test",
-                "purpose:integration_test",
-                "priority:high",
-            ],
+            "labels": {
+                "environment": "test",
+                "purpose": "integration_test",
+                "priority": "high",
+            },
         },
     )
     response_json = json.loads(result.content[0].text) if result and result.content and result.content[0].text else {}
@@ -156,10 +156,7 @@ async def test_execute_flow(kestra_client, cleanup):
         "add_execution_labels",
         {
             "execution_id": execution_id,
-            "labels": [
-                {"key": "revision", "value": "1"},
-                {"key": "reason", "value": "test"},
-            ],
+            "labels": {"revision": "1", "reason": "test"},
         },
     )
     response_json = json.loads(result.content[0].text) if result and result.content and result.content[0].text else {}
