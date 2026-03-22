@@ -181,3 +181,4 @@ agents/plugins.csv
 .wip/
 .DS_Store
 src/plugins.csv
+/.claude

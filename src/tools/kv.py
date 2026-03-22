@@ -52,7 +52,7 @@ def register_kv_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             resp = await client.put(
                 f"/namespaces/{namespace}/kv/{key}",
                 content=content,
-                headers={"Content-Type": "application/json"},
+                headers={"Content-Type": "text/plain"},
             )
             resp.raise_for_status()
             return {"status": "ok"}

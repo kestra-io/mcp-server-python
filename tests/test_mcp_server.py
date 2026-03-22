@@ -64,6 +64,7 @@ async def test_list_tools():
             "create_flow_from_yaml",
             "manage_flow",
             "generate_flow",
+            "generate_dashboard",
             "manage_kv_store",
             "list_namespaces",
             "list_flows_in_namespace",
@@ -92,7 +93,9 @@ async def test_list_tools():
             "manage_apps",
             "manage_group",
             "manage_invitations",
-            "manage_tests"
+            "manage_tests",
+            "generate_app",
+            "generate_test"
         }
 
         # Check if EE tools are disabled

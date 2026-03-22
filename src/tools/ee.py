@@ -1,5 +1,6 @@
 from mcp.server.fastmcp import FastMCP
 import httpx
+import uuid
 from typing import Annotated, List, Literal
 from pydantic import Field
 import os
@@ -30,6 +31,26 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         
         # Default to 0.24+
         return "0.24+"
+
+    def _extract_invitation(data):
+        """Extract a single invitation dict from API response (which may be nested lists)."""
+        if isinstance(data, dict) and "id" in data:
+            return data
+        if isinstance(data, list):
+            for item in data:
+                result = _extract_invitation(item)
+                if result:
+                    return result
+        return None
+
+    async def _fetch_invitation_by_email(email: str):
+        """Fetch the most recent invitation for an email address."""
+        try:
+            resp = await client.get(f"/invitations/email/{email}")
+            resp.raise_for_status()
+            return _extract_invitation(resp.json())
+        except Exception:
+            return None
 
     @mcp.tool()
     async def invite_user(
@@ -105,8 +126,40 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             }
 
         resp = await client.post(f"/invitations", json=payload)
-        resp.raise_for_status()
-        return resp.json()
+        if resp.status_code == 409:
+            # 409 Conflict means an invitation already exists or user already has access
+            try:
+                existing = await client.get(f"/invitations/email/{email}")
+                existing.raise_for_status()
+                invites = existing.json()
+                invite = _extract_invitation(invites)
+                if invite:
+                    return invite
+            except Exception:
+                pass
+            try:
+                return resp.json()
+            except Exception:
+                resp.raise_for_status()
+
+        # For 500 errors (e.g. SMTP failure), the invitation may still have been created
+        if resp.status_code >= 400:
+            created_invite = await _fetch_invitation_by_email(email)
+            if created_invite:
+                return created_invite
+            resp.raise_for_status()
+
+        # 201/204 responses may have no body - fetch the created invitation
+        try:
+            result = resp.json()
+            if result:
+                return result
+        except Exception:
+            pass
+        created_invite = await _fetch_invitation_by_email(email)
+        if created_invite:
+            return created_invite
+        return {"email": email, "status": "CREATED"}
 
     @mcp.tool()
     async def manage_tests(
@@ -632,3 +685,93 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         resp = await client.get(url)
         resp.raise_for_status()
         return resp.json()
+
+    @mcp.tool()
+    async def generate_app(
+        user_prompt: Annotated[
+            str,
+            Field(description="The user prompt describing what app to generate"),
+        ],
+        app_yaml: Annotated[
+            str,
+            Field(description="Existing app YAML to use as context for regeneration. Optional - if not provided, a new app will be generated from scratch."),
+        ] = "",
+        provider_id: Annotated[
+            str,
+            Field(description="Optional AI provider ID to use for generation. Use the list from GET /ai/providers if multiple providers are configured."),
+        ] = "",
+        auto_create: Annotated[
+            bool,
+            Field(description="If true, automatically create the app after generation. Defaults to false so you can review the YAML first."),
+        ] = False,
+    ) -> str:
+        """Generate or regenerate an app based on a prompt and existing app context.
+
+        This tool uses Kestra's AI app generation endpoint to create or modify apps
+        based on natural language descriptions and existing app definitions.
+
+        This tool is available in Kestra 0.24 and later (Enterprise Edition).
+
+        Returns the generated app YAML definition. If auto_create is true, the app is also created in Kestra."""
+        payload = {
+            "conversationId": str(uuid.uuid4()),
+            "userPrompt": user_prompt,
+        }
+        if app_yaml:
+            payload["yaml"] = app_yaml
+        if provider_id:
+            payload["providerId"] = provider_id
+
+        resp = await client.post("/ai/generate/app", json=payload)
+        resp.raise_for_status()
+        generated_yaml = resp.text
+
+        if auto_create:
+            return await manage_apps(action="create", yaml_source=generated_yaml)
+
+        return generated_yaml
+
+    @mcp.tool()
+    async def generate_test(
+        user_prompt: Annotated[
+            str,
+            Field(description="The user prompt describing what test suite to generate"),
+        ],
+        test_yaml: Annotated[
+            str,
+            Field(description="Existing test suite YAML to use as context for regeneration. Optional - if not provided, a new test suite will be generated from scratch."),
+        ] = "",
+        provider_id: Annotated[
+            str,
+            Field(description="Optional AI provider ID to use for generation. Use the list from GET /ai/providers if multiple providers are configured."),
+        ] = "",
+        auto_create: Annotated[
+            bool,
+            Field(description="If true, automatically create the test suite after generation. Defaults to false so you can review the YAML first."),
+        ] = False,
+    ) -> str:
+        """Generate or regenerate a unit test suite based on a prompt and existing test context.
+
+        This tool uses Kestra's AI test suite generation endpoint to create or modify
+        test suites based on natural language descriptions and existing test definitions.
+
+        This tool is available in Kestra 0.24 and later (Enterprise Edition).
+
+        Returns the generated test suite YAML definition. If auto_create is true, the test suite is also created in Kestra."""
+        payload = {
+            "conversationId": str(uuid.uuid4()),
+            "userPrompt": user_prompt,
+        }
+        if test_yaml:
+            payload["yaml"] = test_yaml
+        if provider_id:
+            payload["providerId"] = provider_id
+
+        resp = await client.post("/ai/generate/test", json=payload)
+        resp.raise_for_status()
+        generated_yaml = resp.text
+
+        if auto_create:
+            return await manage_tests(action="create", yaml_source=generated_yaml)
+
+        return generated_yaml

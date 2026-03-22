@@ -1,6 +1,7 @@
 from mcp.server.fastmcp import FastMCP
 import httpx
 import yaml
+import uuid
 from typing import Annotated, List, Literal
 from pydantic import Field
 from kestra.utils import _render_dependencies
@@ -245,23 +246,93 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         ],
         flow_yaml: Annotated[
             str,
-            Field(description="The existing flow YAML to use as context for generation. Optional - if not provided, an empty string will be used."),
+            Field(description="Existing flow YAML to use as context for regeneration. Optional - if not provided, a new flow will be generated from scratch."),
         ] = "",
+        namespace: Annotated[
+            str,
+            Field(description="Optional namespace to use as context for the generated flow"),
+        ] = "",
+        provider_id: Annotated[
+            str,
+            Field(description="Optional AI provider ID to use for generation. Use the list from GET /ai/providers if multiple providers are configured."),
+        ] = "",
+        auto_create: Annotated[
+            bool,
+            Field(description="If true, automatically create or update the flow after generation. Defaults to false so you can review the YAML first."),
+        ] = False,
     ) -> str:
         """Generate or regenerate a flow based on a prompt and existing flow context.
-        
+
         This tool uses Kestra's AI flow generation endpoint to create or modify flows
         based on natural language descriptions and existing flow definitions.
 
         This tool is available in Kestra 0.24 and later.
-        
-        Returns the generated flow YAML definition."""
+
+        Returns the generated flow YAML definition. If auto_create is true, the flow is also created or updated in Kestra."""
         payload = {
+            "conversationId": str(uuid.uuid4()),
             "userPrompt": user_prompt,
-            "flowYaml": flow_yaml or ""
         }
-        
+        if flow_yaml:
+            payload["yaml"] = flow_yaml
+        if namespace:
+            payload["namespace"] = namespace
+        if provider_id:
+            payload["providerId"] = provider_id
+
         resp = await client.post("/ai/generate/flow", json=payload)
         resp.raise_for_status()
-        
-        return resp.text
+        generated_yaml = resp.text
+
+        if auto_create:
+            return await create_flow_from_yaml(generated_yaml)
+
+        return generated_yaml
+
+    @mcp.tool()
+    async def generate_dashboard(
+        user_prompt: Annotated[
+            str,
+            Field(description="The user prompt describing what dashboard to generate"),
+        ],
+        dashboard_yaml: Annotated[
+            str,
+            Field(description="Existing dashboard YAML to use as context for regeneration. Optional - if not provided, a new dashboard will be generated from scratch."),
+        ] = "",
+        provider_id: Annotated[
+            str,
+            Field(description="Optional AI provider ID to use for generation. Use the list from GET /ai/providers if multiple providers are configured."),
+        ] = "",
+        auto_create: Annotated[
+            bool,
+            Field(description="If true, automatically create the dashboard after generation. Defaults to false so you can review the YAML first."),
+        ] = False,
+    ) -> str:
+        """Generate or regenerate a dashboard based on a prompt and existing dashboard context.
+
+        This tool uses Kestra's AI dashboard generation endpoint to create or modify dashboards
+        based on natural language descriptions and existing dashboard definitions.
+
+        This tool is available in Kestra 0.24 and later.
+
+        Returns the generated dashboard YAML definition. If auto_create is true, the dashboard is also created in Kestra."""
+        payload = {
+            "conversationId": str(uuid.uuid4()),
+            "userPrompt": user_prompt,
+        }
+        if dashboard_yaml:
+            payload["yaml"] = dashboard_yaml
+        if provider_id:
+            payload["providerId"] = provider_id
+
+        resp = await client.post("/ai/generate/dashboard", json=payload)
+        resp.raise_for_status()
+        generated_yaml = resp.text
+
+        if auto_create:
+            headers = {"Content-Type": "application/x-yaml"}
+            create_resp = await client.post("/dashboards", content=generated_yaml, headers=headers)
+            create_resp.raise_for_status()
+            return create_resp.json()
+
+        return generated_yaml
