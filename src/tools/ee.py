@@ -231,7 +231,15 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             url = f"/tests/{namespace}/{id_}/run"
             resp = await client.post(url)
             resp.raise_for_status()
-            return resp.json()
+            result = resp.json()
+            # Add UI URL for the test suite page
+            import re as _re
+            base = str(client.base_url).rstrip("/")
+            ui_base = _re.sub(r"/api/v1(/[^/]+)?$", "", base)
+            tenant = os.getenv("KESTRA_TENANT_ID")
+            tenant_segment = f"/{tenant}" if tenant else ""
+            result["url"] = f"{ui_base}/ui{tenant_segment}/tests/{namespace}/{result.get('testSuiteId', id_)}"
+            return result
         else:
             raise ValueError("Action must be one of: create, run, delete")
 
