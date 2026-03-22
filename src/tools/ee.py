@@ -1,36 +1,45 @@
 from mcp.server.fastmcp import FastMCP
 import httpx
 import uuid
-from typing import Annotated, List, Literal
+from typing import Annotated, List, Literal, Optional
 from pydantic import Field
 import os
 from kestra.utils import _root_api_url
 
 
 def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
-    # Version detection function
+    # Version detection with caching
+    _cached_api_version = None
+
     async def _detect_api_version():
-        """Detect if we're running against Kestra 0.24+ or older version"""
+        """Detect if we're running against Kestra 0.24+ or older version. Result is cached."""
+        nonlocal _cached_api_version
+        if _cached_api_version is not None:
+            return _cached_api_version
+
         try:
             # Try 0.24+ endpoint first
             resp = await client.get("/me")
             if resp.status_code == 200:
-                return "0.24+"
-        except:
+                _cached_api_version = "0.24+"
+                return _cached_api_version
+        except Exception:
             pass
-        
+
         try:
             # Try the old endpoint
             tenant = os.getenv("KESTRA_TENANT_ID")
             if tenant:
                 resp = await client.get(f"/{tenant}/me")
                 if resp.status_code == 200:
-                    return "0.23-"
-        except:
+                    _cached_api_version = "0.23-"
+                    return _cached_api_version
+        except Exception:
             pass
-        
+
         # Default to 0.24+
-        return "0.24+"
+        _cached_api_version = "0.24+"
+        return _cached_api_version
 
     def _extract_invitation(data):
         """Extract a single invitation dict from API response (which may be nested lists)."""
@@ -58,11 +67,11 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             str, Field(description="The email address of the user to invite")
         ],
         group_names: Annotated[
-            List[str],
+            Optional[List[str]],
             Field(description="Optional list of group names to add the user to"),
         ] = None,
         role: Annotated[
-            Literal["admin", "developer", "editor", "launcher", "viewer"],
+            Optional[Literal["admin", "developer", "editor", "launcher", "viewer"]],
             Field(
                 description="Optional IAM role to assign: admin, developer, editor, launcher, viewer"
             ),
@@ -168,12 +177,12 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             Field(description="The action to perform: create, run, delete"),
         ],
         yaml_source: Annotated[
-            str, Field(description="The YAML source for the test")
+            Optional[str], Field(description="The YAML source for the test")
         ] = None,
         namespace: Annotated[
-            str, Field(description="The namespace of the test")
+            Optional[str], Field(description="The namespace of the test")
         ] = None,
-        id_: Annotated[str, Field(description="The id of the test")] = None,
+        id_: Annotated[Optional[str], Field(description="The id of the test")] = None,
     ):
         """Manage a test (unit test) by action. For 'create', yaml_source is required (YAML string for the test definition). If the test already exists (POST 409 or 422), update it. For 'run' or 'delete', namespace and id_ are required."""
         headers = {"Content-Type": "application/x-yaml"}
@@ -233,13 +242,13 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             Field(description="The action to perform: create, enable, disable, delete"),
         ],
         uid: Annotated[
-            str,
+            Optional[str],
             Field(
                 description="The UID of the app. Required for 'enable', 'disable', or 'delete' action."
             ),
         ] = None,
         yaml_source: Annotated[
-            str,
+            Optional[str],
             Field(
                 description="The YAML string for the app definition. Required for 'create' action. If the app already exists, it will be updated."
             ),
@@ -330,17 +339,17 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             int,
             Field(description="The number of items to return per page. Default is 10."),
         ] = 10,
-        sort: Annotated[list, Field(description="The list of sort fields.")] = None,
+        sort: Annotated[Optional[list], Field(description="The list of sort fields.")] = None,
         tags: Annotated[
-            list, Field(description="The list of tags to filter by.")
+            Optional[list], Field(description="The list of tags to filter by.")
         ] = None,
         q: Annotated[
-            str, Field(description="A string in a full-text search query.")
+            Optional[str], Field(description="A string in a full-text search query.")
         ] = None,
         namespace: Annotated[
-            str, Field(description="The namespace to filter by.")
+            Optional[str], Field(description="The namespace to filter by.")
         ] = None,
-        flowId: Annotated[str, Field(description="The flowId to filter by.")] = None,
+        flowId: Annotated[Optional[str], Field(description="The flowId to filter by.")] = None,
     ):
         """List existing apps, optionally filtered by namespace, flowId, tags, or full-text search string."""
         params = {"page": page, "size": size}
@@ -365,29 +374,29 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             Field(description="The action to perform: list, create, update, delete"),
         ],
         id_: Annotated[
-            str,
+            Optional[str],
             Field(description="The banner ID. Required for update and delete actions."),
         ] = None,
         message: Annotated[
-            str,
+            Optional[str],
             Field(
                 description="The banner message. Required for create and update actions."
             ),
         ] = None,
         type: Annotated[
-            Literal["INFO", "WARNING", "ERROR"],
+            Optional[Literal["INFO", "WARNING", "ERROR"]],
             Field(
                 description="The banner type. Required for create and update actions."
             ),
         ] = None,
         startDate: Annotated[
-            str,
+            Optional[str],
             Field(
                 description="The start date in ISO format. Required for create and update actions."
             ),
         ] = None,
         endDate: Annotated[
-            str,
+            Optional[str],
             Field(
                 description="The end date in ISO format. Required for create and update actions."
             ),
@@ -395,7 +404,7 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         active: Annotated[
             bool, Field(description="Whether the banner is active. Default is True.")
         ] = True,
-        tenantId: Annotated[str, Field(description="The tenant ID. Optional.")] = None,
+        tenantId: Annotated[Optional[str], Field(description="The tenant ID. Optional.")] = None,
     ):
         """Manage announcements (banners): list, create, update, or delete."""
         if action == "list":
@@ -459,22 +468,22 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             Field(description="The action to perform: create, get, update, delete"),
         ],
         id_: Annotated[
-            str, Field(description="The group ID. Required for get and update actions.")
+            Optional[str], Field(description="The group ID. Required for get and update actions.")
         ] = None,
         name: Annotated[
-            str,
+            Optional[str],
             Field(
                 description="The group name. Required for create and update actions."
             ),
         ] = None,
         description: Annotated[
-            str,
+            Optional[str],
             Field(
                 description="The group description. Required for create and update actions."
             ),
         ] = None,
         role: Annotated[
-            Literal["admin", "developer", "editor", "launcher", "viewer"],
+            Optional[Literal["admin", "developer", "editor", "launcher", "viewer"]],
             Field(description="The role to assign to the group. Optional."),
         ] = None,
     ):
@@ -487,11 +496,7 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         The tenant is managed by the Kestra client and base URL.
         """
         api_version = await _detect_api_version()
-        
-        if api_version == "0.24+":
-            base_url = "/groups"
-        else:
-            base_url = "/groups"
+        base_url = "/groups"
 
         if action == "create":
             if not name:
@@ -630,19 +635,14 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             Field(description="The action to perform: get, delete"),
         ],
         id_: Annotated[
-            str,
+            Optional[str],
             Field(
                 description="The invitation ID. Required for get and delete actions."
             ),
         ] = None,
     ):
         """Manage an invitation by action. The action must be one of 'get' or 'delete'."""
-        api_version = await _detect_api_version()
-        
-        if api_version == "0.24+":
-            base_url = "/invitations" # TODO: update this
-        else:
-            base_url = "/invitations"
+        base_url = "/invitations"
             
         if not id_:
             raise ValueError("'id_' is required for this action.")

@@ -2,7 +2,7 @@ from mcp.server.fastmcp import FastMCP
 import httpx
 from datetime import datetime, timedelta, timezone
 import os
-from typing import Annotated
+from typing import Annotated, Optional
 from pydantic import Field
 
 
@@ -21,20 +21,20 @@ def register_backfill_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         namespace: Annotated[str, Field(description="The namespace of the flow")],
         flow_id: Annotated[str, Field(description="The id of the flow")],
         start: Annotated[
-            str, Field(description="The start date of the backfill")
+            Optional[str], Field(description="The start date of the backfill")
         ] = None,
-        end: Annotated[str, Field(description="The end date of the backfill")] = None,
+        end: Annotated[Optional[str], Field(description="The end date of the backfill")] = None,
         days: Annotated[int, Field(description="The number of days to backfill")] = 0,
         hours: Annotated[int, Field(description="The number of hours to backfill")] = 0,
         minutes: Annotated[
             int, Field(description="The number of minutes to backfill")
         ] = 0,
-        trigger_id: Annotated[str, Field(description="The id of the trigger")] = None,
+        trigger_id: Annotated[Optional[str], Field(description="The id of the trigger")] = None,
         inputs: Annotated[
-            dict, Field(description="The inputs for the backfill")
+            Optional[dict], Field(description="The inputs for the backfill")
         ] = None,
         labels: Annotated[
-            list, Field(description="The labels for the backfill")
+            Optional[list], Field(description="The labels for the backfill")
         ] = None,
     ) -> dict:
         """Backfill executions for a flow within a time window. You can provide explicit start/end dates or use the `days`/`hours`/`minutes` parameters to calculate the start/end dates relative to the current time. Provide those values as integers, e.g., 2 to backfill executions for the last 2 days/hours/minutes."""
@@ -56,7 +56,7 @@ def register_backfill_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
 
         # Find Schedule trigger ID if not given
         if not trigger_id:
-            flow_resp = await client.get(f"flows/{namespace}/{flow_id}")
+            flow_resp = await client.get(f"/flows/{namespace}/{flow_id}")
             flow_resp.raise_for_status()
             for t in flow_resp.json().get("triggers", []):
                 if t.get("type", "").endswith("Schedule"):
@@ -84,6 +84,6 @@ def register_backfill_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         if tenant := os.getenv("KESTRA_TENANT_ID"):
             payload["tenantId"] = tenant
 
-        resp = await client.put("triggers", json=payload)
+        resp = await client.put("/triggers", json=payload)
         resp.raise_for_status()
         return resp.json()
