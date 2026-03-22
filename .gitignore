@@ -182,3 +182,4 @@ agents/plugins.csv
 .DS_Store
 src/plugins.csv
 /.claude
+.apiSpecs/
