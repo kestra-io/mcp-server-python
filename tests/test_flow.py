@@ -61,3 +61,29 @@ async def test_enable_flow(kestra_client, cleanup):
     # Note: count might be 0 if the flow was already enabled
     assert "count" in response_json
     assert response_json["count"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_find_flow(kestra_client, cleanup):
+    await create_flow("hello_mcp.yaml", kestra_client, cleanup)
+
+    # Exact-ish match with spaces instead of underscores
+    result = await kestra_client.call_tool("find_flow", {"query": "hello mcp"})
+    response = json.loads(result.content[0].text)
+    assert response["found"] is True
+    assert "match" in response
+    assert response["match"]["flow_id"] == "hello_mcp"
+    assert response["match"]["namespace"] == "company.team"
+
+    # Partial match
+    result2 = await kestra_client.call_tool("find_flow", {"query": "hello"})
+    response2 = json.loads(result2.content[0].text)
+    assert response2["found"] is True
+    assert any(m["flow_id"] == "hello_mcp" for m in response2["matches"])
+
+    # No match
+    result3 = await kestra_client.call_tool(
+        "find_flow", {"query": "nonexistent_xyz_123"}
+    )
+    response3 = json.loads(result3.content[0].text)
+    assert response3["found"] is False

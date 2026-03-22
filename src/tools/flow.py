@@ -4,7 +4,7 @@ import yaml
 import uuid
 from typing import Annotated, List, Literal
 from pydantic import Field
-from kestra.utils import _render_dependencies
+from kestra.utils import _render_dependencies, _score_flow_match
 from kestra.constants import _RESERVED_FLOW_IDS
 
 
@@ -39,6 +39,71 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             "/flows/search", params={"query": query, "size": size, "page": page}
         )
         return resp.json()
+
+    @mcp.tool()
+    async def find_flow(
+        query: Annotated[
+            str,
+            Field(
+                description="Natural language flow name to search for, e.g. 'hello world' or 'data pipeline'"
+            ),
+        ],
+        namespace: Annotated[
+            str,
+            Field(description="Optional namespace to narrow the search"),
+        ] = "",
+    ) -> dict:
+        """Find a flow by approximate or partial name. Use this when you know
+        a flow's name (or part of it) but not its exact namespace and ID.
+
+        Returns the best matching flow(s) with their namespace and flow_id
+        ready to use in other tools like execute_flow or manage_flow.
+
+        If exactly one strong match is found, returns it directly.
+        If multiple matches exist, returns a ranked list for the user to pick from."""
+        params: dict = {"q": query, "size": 20, "page": 1}
+        if namespace:
+            params["namespace"] = namespace
+
+        resp = await client.get("/flows/search", params=params)
+        resp.raise_for_status()
+        data = resp.json()
+        results = data.get("results", [])
+
+        if not results:
+            return {
+                "found": False,
+                "message": f"No flows found matching '{query}'. Try a different search term or check available flows with search_flows.",
+                "matches": [],
+            }
+
+        scored = []
+        for flow in results:
+            fid = flow.get("id", "")
+            fns = flow.get("namespace", "")
+            score = _score_flow_match(query, fid, fns)
+            scored.append({
+                "namespace": fns,
+                "flow_id": fid,
+                "score": round(score, 3),
+            })
+
+        scored.sort(key=lambda x: x["score"], reverse=True)
+
+        best = scored[0]
+        if best["score"] >= 0.8 and (len(scored) == 1 or scored[1]["score"] < best["score"] - 0.1):
+            return {
+                "found": True,
+                "message": f"Found flow '{best['flow_id']}' in namespace '{best['namespace']}'",
+                "match": {"namespace": best["namespace"], "flow_id": best["flow_id"]},
+                "matches": scored[:5],
+            }
+
+        return {
+            "found": True,
+            "message": f"Found {len(scored)} possible matches. The top results are listed below.",
+            "matches": scored[:5],
+        }
 
     @mcp.tool()
     async def list_flows_with_triggers(

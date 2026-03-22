@@ -24,6 +24,7 @@ async def test_list_tools(kestra_client):
         "namespace_file_action",
         "namespace_directory_action",
         "search_flows",
+        "find_flow",
         "list_flows_with_triggers",
         "create_flow_from_yaml",
         "manage_flow",
