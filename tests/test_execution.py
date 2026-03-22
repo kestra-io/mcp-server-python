@@ -80,6 +80,26 @@ async def test_execute_flow(kestra_client, cleanup):
     assert response_labels["purpose"] == "integration_test"
     assert response_labels["priority"] == "high"
 
+    # Test case 3b: Execute flow with labels containing spaces in values
+    result = await kestra_client.call_tool(
+        "execute_flow",
+        {
+            "namespace": namespace,
+            "flow_id": flow_id,
+            "labels": {
+                "team": "data analytics",
+                "project": "sales forecasting model",
+            },
+        },
+    )
+    response_json = json.loads(result.content[0].text) if result and result.content and result.content[0].text else {}
+    cleanup.track_execution(response_json.get("id", ""))
+    response_labels = {
+        label["key"]: label["value"] for label in response_json["labels"]
+    }
+    assert response_labels["team"] == "data analytics"
+    assert response_labels["project"] == "sales forecasting model"
+
     # Test case 4: Execute flow with scheduled date
     # Schedule for 1 hour from now
     future_time = time.strftime(
