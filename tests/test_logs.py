@@ -35,24 +35,21 @@ async def test_get_execution_logs(kestra_client, cleanup):
     )
     logs_response = json.loads(result.content[0].text) if result and result.content and result.content[0].text else {}
 
-    # Verify we got logs (API returns a single log entry or list)
-    if isinstance(logs_response, dict):
-        log_entry = logs_response
-        assert "namespace" in log_entry
-        assert "flowId" in log_entry
-        assert "executionId" in log_entry
-        assert "timestamp" in log_entry
-        assert "level" in log_entry
-        assert "message" in log_entry
+    # Verify we got logs - unwrap if wrapped in {"results": [...]}
+    if isinstance(logs_response, dict) and "results" in logs_response:
+        logs_list = logs_response["results"]
     elif isinstance(logs_response, list):
-        assert len(logs_response) > 0
-        log_entry = logs_response[0]
-        assert "namespace" in log_entry
-        assert "flowId" in log_entry
-        assert "executionId" in log_entry
-        assert "timestamp" in log_entry
-        assert "level" in log_entry
-        assert "message" in log_entry
+        logs_list = logs_response
+    else:
+        logs_list = [logs_response]
+    assert len(logs_list) > 0
+    log_entry = logs_list[0]
+    assert "namespace" in log_entry
+    assert "flowId" in log_entry
+    assert "executionId" in log_entry
+    assert "timestamp" in log_entry
+    assert "level" in log_entry
+    assert "message" in log_entry
 
 
 @pytest.mark.asyncio

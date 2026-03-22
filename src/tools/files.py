@@ -1,4 +1,4 @@
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 import httpx
 from typing import Annotated, List, Literal, Union
 from pydantic import Field
@@ -28,7 +28,7 @@ def register_files_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 description="Required for 'search' action, the query string for full-text search in file paths."
             ),
         ] = None,
-    ) -> Union[dict, List[str], str]:
+    ) -> dict:
         """Perform a file operation in the given namespace. Returns: for 'get', 'create', 'move', 'delete', and 'search' actions, see their respective return types."""
         if action == "get":
             resp = await client.get(
@@ -65,7 +65,7 @@ def register_files_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                         f"/namespaces/{namespace}/files", params={"path": path}
                     )
                     if check_file.status_code == 404:
-                        return f"Error: The source file '{path}' does not exist in namespace '{namespace}'."
+                        return {"error": f"The source file '{path}' does not exist in namespace '{namespace}'."}
                     # Check if the destination directory exists
                     dest_dir = os.path.dirname(to_path)
                     if dest_dir:
@@ -74,9 +74,9 @@ def register_files_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                             params={"path": dest_dir},
                         )
                         if check_dir.status_code == 404:
-                            return f"Error: The destination directory '{dest_dir}' does not exist in namespace '{namespace}'. Please create it first."
+                            return {"error": f"The destination directory '{dest_dir}' does not exist in namespace '{namespace}'. Please create it first."}
                     # Generic 404
-                    return f"Error: Move failed with 404 Not Found. Please check your paths and try again."
+                    return {"error": "Move failed with 404 Not Found. Please check your paths and try again."}
                 else:
                     raise
 
@@ -108,14 +108,14 @@ def register_files_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         to_path: Annotated[
             str, Field(description="Required for 'move' action, the destination path.")
         ] = None,
-    ) -> Union[List[dict], dict, str]:
+    ) -> dict:
         """Perform a directory operation in the given namespace."""
         if action == "list":
             resp = await client.get(
                 f"/namespaces/{namespace}/files/directory", params={"path": path}
             )
             resp.raise_for_status()
-            return resp.json()
+            return {"results": resp.json()}
         elif action == "create":
             resp = await client.post(
                 f"/namespaces/{namespace}/files/directory", params={"path": path}
@@ -127,12 +127,12 @@ def register_files_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 f"/namespaces/{namespace}/files", params={"path": path}
             )
             if resp.status_code == 404:
-                return f"Error: The directory '{path}' does not exist in namespace '{namespace}'."
+                return {"error": f"The directory '{path}' does not exist in namespace '{namespace}'."}
             resp.raise_for_status()
             return resp.json() if resp.content else {"status": "directory_deleted"}
         elif action == "move":
             if to_path is None:
-                return "Error: 'to_path' must be provided for move action."
+                return {"error": "'to_path' must be provided for move action."}
             try:
                 resp = await client.put(
                     f"/namespaces/{namespace}/files",
@@ -148,7 +148,7 @@ def register_files_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                         params={"path": path},
                     )
                     if check_dir.status_code == 404:
-                        return f"Error: The source directory '{path}' does not exist in namespace '{namespace}'."
+                        return {"error": f"The source directory '{path}' does not exist in namespace '{namespace}'."}
                     # Check if the destination parent directory exists
                     dest_parent = os.path.dirname(to_path)
                     if dest_parent:
@@ -157,8 +157,8 @@ def register_files_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                             params={"path": dest_parent},
                         )
                         if check_dest.status_code == 404:
-                            return f"Error: The destination parent directory '{dest_parent}' does not exist in namespace '{namespace}'. Please create it first."
-                    return f"Error: Move failed with 404 Not Found. Please check your paths and try again."
+                            return {"error": f"The destination parent directory '{dest_parent}' does not exist in namespace '{namespace}'. Please create it first."}
+                    return {"error": "Move failed with 404 Not Found. Please check your paths and try again."}
                 else:
                     raise
         else:

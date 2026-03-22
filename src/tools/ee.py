@@ -1,4 +1,4 @@
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 import httpx
 import uuid
 from typing import Annotated, List, Literal, Optional
@@ -712,7 +712,7 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             bool,
             Field(description="If true, automatically create the app after generation. Defaults to false so you can review the YAML first."),
         ] = False,
-    ) -> str:
+    ) -> dict:
         """Generate or regenerate an app based on a prompt and existing app context.
 
         This tool uses Kestra's AI app generation endpoint to create or modify apps
@@ -737,7 +737,7 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         if auto_create:
             return await manage_apps(action="create", yaml_source=generated_yaml)
 
-        return generated_yaml
+        return {"result": generated_yaml}
 
     @mcp.tool()
     async def generate_test(
@@ -757,7 +757,7 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             bool,
             Field(description="If true, automatically create the test suite after generation. Defaults to false so you can review the YAML first."),
         ] = False,
-    ) -> str:
+    ) -> dict:
         """Generate or regenerate a unit test suite based on a prompt and existing test context.
 
         This tool uses Kestra's AI test suite generation endpoint to create or modify
@@ -782,4 +782,4 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         if auto_create:
             return await manage_tests(action="create", yaml_source=generated_yaml)
 
-        return generated_yaml
+        return {"result": generated_yaml}

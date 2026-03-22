@@ -1,4 +1,4 @@
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 import httpx
 from typing import Annotated, Any, List, Literal, Optional
 from pydantic import Field
@@ -28,7 +28,7 @@ def register_logs_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             Optional[int],
             Field(description="Filter logs by specific attempt number. Default is None.")
         ] = None,
-    ) -> list[dict[str, Any]]:
+    ) -> dict:
         """Get logs for a specific execution with optional filtering.
         
         Returns a list of log entries in JSON format. Each log entry contains:
@@ -69,7 +69,8 @@ def register_logs_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
 
         resp = await client.get(f"/logs/{execution_id}", params=params)
         resp.raise_for_status()
-        return resp.json()
+        data = resp.json()
+        return {"results": data} if isinstance(data, list) else data
 
     @mcp.tool()
     async def download_execution_logs(
@@ -94,7 +95,7 @@ def register_logs_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             Optional[int],
             Field(description="Filter logs by specific attempt number. Default is None.")
         ] = None,
-    ) -> str:
+    ) -> dict:
         """Download logs for a specific execution as plain text.
         
         Returns the logs as a plain text string, formatted for easy reading.
@@ -123,7 +124,7 @@ def register_logs_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
 
         resp = await client.get(f"/logs/{execution_id}/download", params=params)
         resp.raise_for_status()
-        return resp.text
+        return {"result": resp.text}
 
     @mcp.tool()
     async def search_logs(
@@ -305,7 +306,7 @@ def register_logs_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 description="Minimum log level filter. Must be one of: ERROR, WARN, INFO, DEBUG, TRACE. Default is None (no filter)."
             ),
         ] = None,
-    ) -> str:
+    ) -> dict:
         """Follow logs for a specific execution in real-time.
         
         Returns logs as they are generated using Server-Sent Events (SSE).
@@ -331,4 +332,4 @@ def register_logs_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
 
         resp = await client.get(f"/logs/{execution_id}/follow", params=params)
         resp.raise_for_status()
-        return resp.text
+        return {"result": resp.text}

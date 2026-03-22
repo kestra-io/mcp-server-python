@@ -1,4 +1,4 @@
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 import httpx
 from typing import Annotated, Any, Literal, List
 from pydantic import Field
@@ -256,7 +256,7 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 description="Number of executions to fetch per page. Default is 100."
             ),
         ] = 100,
-    ) -> List[dict]:
+    ) -> dict:
         """List executions in a namespace (and optional flow) with flexible filtering options.
 
         Returns a JSON array of execution objects, sorted by startDate in descending order (newest first). Each returned object includes at least:
@@ -327,4 +327,4 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         if count is not None:
             all_execs = all_execs[:count]
 
-        return all_execs
+        return {"results": all_execs}

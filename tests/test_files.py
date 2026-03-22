@@ -104,8 +104,12 @@ async def test_namespace_directory_actions(kestra_client):
         {"namespace": "company.team", "path": "test_dir", "action": "list"},
     )
     print(f"List test_dir result: {listing}")
-    listing_data = json.loads(listing.content[0].text)
+    listing_response = json.loads(listing.content[0].text)
+    listing_items = listing_response.get("results", listing_response) if isinstance(listing_response, dict) else listing_response
     # Verify the response schema for a single directory item
+    assert isinstance(listing_items, list)
+    assert len(listing_items) > 0
+    listing_data = listing_items[0]
     assert "type" in listing_data
     assert "size" in listing_data
     assert "fileName" in listing_data

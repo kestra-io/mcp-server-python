@@ -18,7 +18,7 @@ async def test_namespace_actions(kestra_client):
 
     # Test list_namespaces (with flows)
     namespaces_with_flows = await kestra_client.call_tool(
-        "list_namespaces", {"with_flows": True}
+        "list_namespaces", {"with_flows_only": True}
     )
     namespaces_with_flows_texts = [ns.text for ns in namespaces_with_flows.content]
     print(f"Namespaces with flows: {namespaces_with_flows_texts}")
@@ -31,11 +31,12 @@ async def test_namespace_actions(kestra_client):
         "list_flows_in_namespace", {"namespace": test_namespace}
     )
     if flows.content:
-        flow_dicts = [json.loads(flow.text) for flow in flows.content]
-        print(f"Flows in {test_namespace}: {flow_dicts}")
-        assert isinstance(flow_dicts, list)
+        flows_response = json.loads(flows.content[0].text)
+        flow_list = flows_response.get("results", flows_response) if isinstance(flows_response, dict) else flows_response
+        print(f"Flows in {test_namespace}: {flow_list}")
+        assert isinstance(flow_list, list)
         # Verify each flow has required fields
-        for flow in flow_dicts:
+        for flow in flow_list:
             assert "id" in flow
             assert "namespace" in flow
 

@@ -57,9 +57,9 @@ async def test_kv_actions(kestra_client):
     result = await kestra_client.call_tool(
         "manage_kv_store", {"namespace": "company.team", "action": "list"}
     )
-    print(f"List keys result: {json.loads(result.content[0].text)}")
-    # Parse each key info from the result list
-    keys = [json.loads(item.text) for item in result.content]
+    list_response = json.loads(result.content[0].text)
+    print(f"List keys result: {list_response}")
+    keys = list_response.get("results", list_response) if isinstance(list_response, dict) else list_response
     assert isinstance(keys, list)
     # Verify all our test keys are in the list
     for key, _ in test_cases:

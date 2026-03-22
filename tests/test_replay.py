@@ -53,12 +53,12 @@ async def test_replay_execution(kestra_client, cleanup):
         "replay_execution",
         {"flow_id": "fail_randomly", "namespace": "company.team"},
     )
-    replay_text = replay_result.content[0].text
-    print(f"Replay result: {replay_text}")
-    assert "Replayed execution" in replay_text
-    assert "fail_randomly" in replay_text
-    assert "company.team" in replay_text
-    assert "Result: {'count': 1}" in replay_text
+    replay_json = json.loads(replay_result.content[0].text)
+    print(f"Replay result: {replay_json}")
+    assert "Replayed execution" in replay_json["message"]
+    assert "fail_randomly" in replay_json["message"]
+    assert "company.team" in replay_json["message"]
+    assert replay_json["result"]["count"] == 1
 
     # Replay the first execution by ID
     replay_result = await kestra_client.call_tool(

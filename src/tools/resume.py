@@ -1,4 +1,4 @@
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 import httpx
 from typing import Annotated, List, Any, Dict, Optional
 from pydantic import Field

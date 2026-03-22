@@ -1,4 +1,4 @@
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 import httpx
 import yaml
 import uuid
@@ -125,7 +125,7 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 description="Whether to include only flows with disabled triggers. Default is False."
             ),
         ] = False,
-    ) -> List[str]:
+    ) -> dict:
         """List all flows that have one or more triggers.
         Returns a markdown‑style list of lines, e.g.:
 
@@ -187,7 +187,7 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
 
                 results.append("\n".join(lines))
 
-        return results
+        return {"results": results}
 
     @mcp.tool()
     async def create_flow_from_yaml(
@@ -278,17 +278,18 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         elif action == "list_dependencies":
             resp = await client.get(f"/flows/{namespace}/{flow_id}/dependencies")
             resp.raise_for_status()
-            return await _render_dependencies(
+            graph = await _render_dependencies(
                 resp.json(),
                 "Flows listed without arrows have no dependencies within this flow.",
             )
+            return {"result": graph}
         elif action == "get_yaml":
             resp = await client.get(
                 f"/flows/{namespace}/{flow_id}", params={"source": "true"}
             )
             resp.raise_for_status()
             data = resp.json()
-            return data.get("source")
+            return {"result": data.get("source")}
         elif action == "delete":
             resp = await client.delete(f"/flows/{namespace}/{flow_id}")
             if resp.status_code in (200, 204):
@@ -325,7 +326,7 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             bool,
             Field(description="If true, automatically create or update the flow after generation. Defaults to false so you can review the YAML first."),
         ] = False,
-    ) -> str:
+    ) -> dict:
         """Generate or regenerate a flow based on a prompt and existing flow context.
 
         This tool uses Kestra's AI flow generation endpoint to create or modify flows
@@ -352,7 +353,7 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         if auto_create:
             return await create_flow_from_yaml(generated_yaml)
 
-        return generated_yaml
+        return {"result": generated_yaml}
 
     @mcp.tool()
     async def generate_dashboard(
@@ -372,7 +373,7 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             bool,
             Field(description="If true, automatically create the dashboard after generation. Defaults to false so you can review the YAML first."),
         ] = False,
-    ) -> str:
+    ) -> dict:
         """Generate or regenerate a dashboard based on a prompt and existing dashboard context.
 
         This tool uses Kestra's AI dashboard generation endpoint to create or modify dashboards
@@ -400,4 +401,4 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             create_resp.raise_for_status()
             return create_resp.json()
 
-        return generated_yaml
+        return {"result": generated_yaml}
