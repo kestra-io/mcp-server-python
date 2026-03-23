@@ -183,3 +183,4 @@ agents/plugins.csv
 src/plugins.csv
 /.claude
 .apiSpecs/
+.test-results/

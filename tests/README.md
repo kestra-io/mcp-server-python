@@ -38,6 +38,17 @@ uv run pytest tests/test_flow.py tests/test_execution.py
 uv run pytest tests/ --ignore=tests/test_ee.py -v
 ```
 
+## Running Against Multiple Kestra Versions
+
+To validate cross-version compatibility, run tests against all configured instances:
+
+```bash
+./tests/run_all_versions.sh        # default: --tb=short
+./tests/run_all_versions.sh -v -x  # verbose, stop on first failure
+```
+
+The script loops through 4 Kestra instances (EE develop, OSS develop, EE latest, OSS latest), skips any that aren't reachable, and prints a summary at the end. Edit the `INSTANCES` array in the script to add/remove targets. Results are saved to `.test-results/`.
+
 ## Test Structure
 
 - `test_ee.py` - Enterprise Edition specific tests (requires EE/Cloud environment)
