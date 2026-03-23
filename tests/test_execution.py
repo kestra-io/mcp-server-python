@@ -204,8 +204,14 @@ async def test_execute_flow(kestra_client, cleanup):
 @pytest.mark.asyncio
 async def test_list_executions(kestra_client, cleanup):
     """Test listing executions."""
-    # Ensure the flow exists for listing
+    # Ensure the flow exists and has at least one execution
     await create_flow("app_get_data_flow.yaml", kestra_client, cleanup)
+    exec_result = await kestra_client.call_tool(
+        "execute_flow", {"namespace": "company.team", "flow_id": "get_data"}
+    )
+    exec_json = json.loads(exec_result.content[0].text)
+    cleanup.track_execution(exec_json["id"])
+    await poll_for_execution(kestra_client, exec_json["id"], max_retries=10, retry_interval=1)
 
     # Test case 1: List all executions for a specific flow
     result = await kestra_client.call_tool(
