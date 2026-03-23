@@ -5,6 +5,10 @@ from pydantic import Field
 import json
 import re
 
+# Pre-compiled patterns for date/datetime detection in KV values
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:Z)?$")
+
 
 def register_kv_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
     @mcp.tool()
@@ -35,13 +39,9 @@ def register_kv_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         elif action == "set":
             if not key or value is None:
                 raise ValueError("`key` and `value` are required for 'set' action")
-            date_regex = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-            datetime_regex = re.compile(
-                r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:Z)?$"
-            )
             if not isinstance(value, str):
                 content = json.dumps(value)
-            elif date_regex.match(value) or datetime_regex.match(value):
+            elif _DATE_RE.match(value) or _DATETIME_RE.match(value):
                 content = value  # send as raw string, not quoted
             else:
                 try:

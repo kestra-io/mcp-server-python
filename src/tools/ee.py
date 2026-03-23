@@ -1,6 +1,8 @@
 from fastmcp import FastMCP
 import httpx
+import re
 import uuid
+import yaml
 from typing import Annotated, List, Literal, Optional
 from pydantic import Field
 import os
@@ -195,9 +197,7 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 return resp.json()
             except httpx.HTTPStatusError as e:
                 if e.response.status_code in (409, 422):
-                    import yaml as _yaml
-
-                    doc = _yaml.safe_load(yaml_source)
+                    doc = yaml.safe_load(yaml_source)
                     ns = doc.get("namespace")
                     tid = doc.get("id")
                     if not ns or not tid:
@@ -233,9 +233,8 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             resp.raise_for_status()
             result = resp.json()
             # Add UI URL for the test suite page
-            import re as _re
             base = str(client.base_url).rstrip("/")
-            ui_base = _re.sub(r"/api/v1(/[^/]+)?$", "", base)
+            ui_base = re.sub(r"/api/v1(/[^/]+)?$", "", base)
             tenant = os.getenv("KESTRA_TENANT_ID")
             tenant_segment = f"/{tenant}" if tenant else ""
             result["url"] = f"{ui_base}/ui{tenant_segment}/tests/{namespace}/{result.get('testSuiteId', id_)}"
@@ -273,9 +272,7 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 return resp.json()
             except httpx.HTTPStatusError as e:
                 if e.response.status_code in (409, 422):
-                    import yaml as _yaml
-
-                    doc = _yaml.safe_load(yaml_source)
+                    doc = yaml.safe_load(yaml_source)
                     app_id = doc.get("id")
                     app_namespace = doc.get("namespace")
                     app_flow_id = doc.get("flowId")
