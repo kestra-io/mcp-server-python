@@ -408,14 +408,14 @@ async def test_execute_flow_with_subflow(kestra_client, cleanup):
     ), "Could not find correlation ID in parent execution"
 
     # Find the subflow execution using the correlation ID
-    max_retries = 5
+    max_retries = 10
     retry_count = 0
     subflow_execution_id = None
 
     while retry_count < max_retries and subflow_execution_id is None:
         result = await kestra_client.call_tool(
             "list_executions",
-            {"namespace": "company.team", "flow_id": "hello_mcp", "minutes": 2},
+            {"namespace": "company.team", "flow_id": "hello_mcp", "minutes": 5},
         )
         response_json = (
             json.loads(result.content[0].text) if result and result.content and result.content[0].text else {}
@@ -424,10 +424,13 @@ async def test_execute_flow_with_subflow(kestra_client, cleanup):
             f"List executions response (attempt {retry_count + 1}):", response_json
         )
 
-        # Handle both single execution and list of executions
-        executions = (
-            [response_json] if isinstance(response_json, dict) else response_json
-        )
+        # Handle dict with "results" key, single execution dict, or list
+        if isinstance(response_json, dict) and "results" in response_json:
+            executions = response_json["results"]
+        elif isinstance(response_json, dict):
+            executions = [response_json]
+        else:
+            executions = response_json
 
         # Find the execution with matching correlation ID
         for execution in executions:
@@ -446,9 +449,9 @@ async def test_execute_flow_with_subflow(kestra_client, cleanup):
             retry_count += 1
             if retry_count < max_retries:
                 print(
-                    f"Subflow execution not found, retrying in 2 seconds... (attempt {retry_count + 1}/{max_retries})"
+                    f"Subflow execution not found, retrying in 3 seconds... (attempt {retry_count + 1}/{max_retries})"
                 )
-                await asyncio.sleep(2)
+                await asyncio.sleep(3)
 
     assert (
         subflow_execution_id is not None

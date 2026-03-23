@@ -35,7 +35,7 @@ def register_files_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 f"/namespaces/{namespace}/files", params={"path": path}
             )
             resp.raise_for_status()
-            return resp.content
+            return {"content": resp.text}
 
         elif action == "create":
             if file_content is None:
@@ -93,7 +93,8 @@ def register_files_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 f"/namespaces/{namespace}/files/search", params={"q": q}
             )
             resp.raise_for_status()
-            return resp.json()
+            results = resp.json()
+            return {"results": results} if isinstance(results, list) else results
         else:
             raise ValueError(f"Unknown action: {action}")
 
