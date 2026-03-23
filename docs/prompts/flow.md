@@ -5,7 +5,7 @@ Get the YAML definition of the flow hello-world in the namespace tutorial
 
 Find all flows containing automation
 Find all flows containing Hello World
-Seach for flows including Hello World in its source code
+Search for flows including Hello World in its source code
 Get all revisions for the flow hello-world in namespace tutorial
 Get all flow dependencies for the flow hello-world in the namespace tutorial
 Find flows that have triggers
@@ -45,6 +45,16 @@ tasks:
     type: io.kestra.plugin.core.flow.Sleep
     duration: PT15M
 
+
+Find me a flow called hello world
+Find a flow matching "scheduled"
+Find a flow called "random" in the company namespace
+
+Generate a flow that reads data from a Postgres database and writes to S3
+Generate a flow that sends a Slack alert when a file lands in GCS and auto-create it
+
+Generate a dashboard showing execution counts per namespace
+Generate a dashboard for monitoring failed executions over time and auto-create it
 
 Update the flow as follows:
 id: hello-world

@@ -1,9 +1,10 @@
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 import httpx
 import yaml
+import uuid
 from typing import Annotated, List, Literal
 from pydantic import Field
-from kestra.utils import _render_dependencies
+from kestra.utils import _render_dependencies, _score_flow_match
 from kestra.constants import _RESERVED_FLOW_IDS
 
 
@@ -40,6 +41,71 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         return resp.json()
 
     @mcp.tool()
+    async def find_flow(
+        query: Annotated[
+            str,
+            Field(
+                description="Natural language flow name to search for, e.g. 'hello world' or 'data pipeline'"
+            ),
+        ],
+        namespace: Annotated[
+            str,
+            Field(description="Optional namespace to narrow the search"),
+        ] = "",
+    ) -> dict:
+        """Find a flow by approximate or partial name. Use this when you know
+        a flow's name (or part of it) but not its exact namespace and ID.
+
+        Returns the best matching flow(s) with their namespace and flow_id
+        ready to use in other tools like execute_flow or manage_flow.
+
+        If exactly one strong match is found, returns it directly.
+        If multiple matches exist, returns a ranked list for the user to pick from."""
+        params: dict = {"q": query, "size": 20, "page": 1}
+        if namespace:
+            params["namespace"] = namespace
+
+        resp = await client.get("/flows/search", params=params)
+        resp.raise_for_status()
+        data = resp.json()
+        results = data.get("results", [])
+
+        if not results:
+            return {
+                "found": False,
+                "message": f"No flows found matching '{query}'. Try a different search term or check available flows with search_flows.",
+                "matches": [],
+            }
+
+        scored = []
+        for flow in results:
+            fid = flow.get("id", "")
+            fns = flow.get("namespace", "")
+            score = _score_flow_match(query, fid, fns)
+            scored.append({
+                "namespace": fns,
+                "flow_id": fid,
+                "score": round(score, 3),
+            })
+
+        scored.sort(key=lambda x: x["score"], reverse=True)
+
+        best = scored[0]
+        if best["score"] >= 0.8 and (len(scored) == 1 or scored[1]["score"] < best["score"] - 0.1):
+            return {
+                "found": True,
+                "message": f"Found flow '{best['flow_id']}' in namespace '{best['namespace']}'",
+                "match": {"namespace": best["namespace"], "flow_id": best["flow_id"]},
+                "matches": scored[:5],
+            }
+
+        return {
+            "found": True,
+            "message": f"Found {len(scored)} possible matches. The top results are listed below.",
+            "matches": scored[:5],
+        }
+
+    @mcp.tool()
     async def list_flows_with_triggers(
         namespace: Annotated[
             str,
@@ -59,7 +125,7 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 description="Whether to include only flows with disabled triggers. Default is False."
             ),
         ] = False,
-    ) -> List[str]:
+    ) -> dict:
         """List all flows that have one or more triggers.
         Returns a markdown‑style list of lines, e.g.:
 
@@ -121,7 +187,7 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
 
                 results.append("\n".join(lines))
 
-        return results
+        return {"results": results}
 
     @mcp.tool()
     async def create_flow_from_yaml(
@@ -212,17 +278,18 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         elif action == "list_dependencies":
             resp = await client.get(f"/flows/{namespace}/{flow_id}/dependencies")
             resp.raise_for_status()
-            return await _render_dependencies(
+            graph = await _render_dependencies(
                 resp.json(),
                 "Flows listed without arrows have no dependencies within this flow.",
             )
+            return {"result": graph}
         elif action == "get_yaml":
             resp = await client.get(
                 f"/flows/{namespace}/{flow_id}", params={"source": "true"}
             )
             resp.raise_for_status()
             data = resp.json()
-            return data.get("source")
+            return {"result": data.get("source")}
         elif action == "delete":
             resp = await client.delete(f"/flows/{namespace}/{flow_id}")
             if resp.status_code in (200, 204):
@@ -245,23 +312,93 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         ],
         flow_yaml: Annotated[
             str,
-            Field(description="The existing flow YAML to use as context for generation. Optional - if not provided, an empty string will be used."),
+            Field(description="Existing flow YAML to use as context for regeneration. Optional - if not provided, a new flow will be generated from scratch."),
         ] = "",
-    ) -> str:
+        namespace: Annotated[
+            str,
+            Field(description="Optional namespace to use as context for the generated flow"),
+        ] = "",
+        provider_id: Annotated[
+            str,
+            Field(description="Optional AI provider ID to use for generation. Use the list from GET /ai/providers if multiple providers are configured."),
+        ] = "",
+        auto_create: Annotated[
+            bool,
+            Field(description="If true, automatically create or update the flow after generation. Defaults to false so you can review the YAML first."),
+        ] = False,
+    ) -> dict:
         """Generate or regenerate a flow based on a prompt and existing flow context.
-        
+
         This tool uses Kestra's AI flow generation endpoint to create or modify flows
         based on natural language descriptions and existing flow definitions.
 
         This tool is available in Kestra 0.24 and later.
-        
-        Returns the generated flow YAML definition."""
+
+        Returns the generated flow YAML definition. If auto_create is true, the flow is also created or updated in Kestra."""
         payload = {
+            "conversationId": str(uuid.uuid4()),
             "userPrompt": user_prompt,
-            "flowYaml": flow_yaml or ""
         }
-        
+        if flow_yaml:
+            payload["yaml"] = flow_yaml
+        if namespace:
+            payload["namespace"] = namespace
+        if provider_id:
+            payload["providerId"] = provider_id
+
         resp = await client.post("/ai/generate/flow", json=payload)
         resp.raise_for_status()
-        
-        return resp.text
+        generated_yaml = resp.text
+
+        if auto_create:
+            return await create_flow_from_yaml(generated_yaml)
+
+        return {"result": generated_yaml}
+
+    @mcp.tool()
+    async def generate_dashboard(
+        user_prompt: Annotated[
+            str,
+            Field(description="The user prompt describing what dashboard to generate"),
+        ],
+        dashboard_yaml: Annotated[
+            str,
+            Field(description="Existing dashboard YAML to use as context for regeneration. Optional - if not provided, a new dashboard will be generated from scratch."),
+        ] = "",
+        provider_id: Annotated[
+            str,
+            Field(description="Optional AI provider ID to use for generation. Use the list from GET /ai/providers if multiple providers are configured."),
+        ] = "",
+        auto_create: Annotated[
+            bool,
+            Field(description="If true, automatically create the dashboard after generation. Defaults to false so you can review the YAML first."),
+        ] = False,
+    ) -> dict:
+        """Generate or regenerate a dashboard based on a prompt and existing dashboard context.
+
+        This tool uses Kestra's AI dashboard generation endpoint to create or modify dashboards
+        based on natural language descriptions and existing dashboard definitions.
+
+        This tool is available in Kestra 0.24 and later.
+
+        Returns the generated dashboard YAML definition. If auto_create is true, the dashboard is also created in Kestra."""
+        payload = {
+            "conversationId": str(uuid.uuid4()),
+            "userPrompt": user_prompt,
+        }
+        if dashboard_yaml:
+            payload["yaml"] = dashboard_yaml
+        if provider_id:
+            payload["providerId"] = provider_id
+
+        resp = await client.post("/ai/generate/dashboard", json=payload)
+        resp.raise_for_status()
+        generated_yaml = resp.text
+
+        if auto_create:
+            headers = {"Content-Type": "application/x-yaml"}
+            create_resp = await client.post("/dashboards", content=generated_yaml, headers=headers)
+            create_resp.raise_for_status()
+            return create_resp.json()
+
+        return {"result": generated_yaml}

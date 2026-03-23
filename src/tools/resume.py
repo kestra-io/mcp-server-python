@@ -1,6 +1,6 @@
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 import httpx
-from typing import Annotated, List, Any, Dict
+from typing import Annotated, List, Any, Dict, Optional
 from pydantic import Field
 from kestra.utils import _parse_iso
 from kestra.constants import (
@@ -12,23 +12,23 @@ def register_resume_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
     @mcp.tool()
     async def resume_execution(
         execution_ids: Annotated[
-            List[str],
+            Optional[List[str]],
             Field(
                 description="List of execution IDs to resume. If not provided, namespace and flow_id are required to fetch the most recent paused execution."
             ),
         ] = None,
         namespace: Annotated[
-            str,
+            Optional[str],
             Field(
                 description="Namespace of the flow (required if execution_ids is not provided)"
             ),
         ] = None,
         flow_id: Annotated[
-            str,
+            Optional[str],
             Field(description="Flow ID (required if execution_ids is not provided)"),
         ] = None,
         on_resume: Annotated[
-            dict,
+            Optional[dict],
             Field(
                 description="Key-value pairs to send as multipart/form-data. If not provided, the bulk resume endpoint is used or the Pause task defaults are used if available."
             ),
@@ -48,12 +48,12 @@ def register_resume_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             if on_resume is None:
                 on_resume = {}
             if not on_resume:
-                resp = await client.post("executions/resume/by-ids", json=execution_ids)
+                resp = await client.post("/executions/resume/by-ids", json=execution_ids)
                 resp.raise_for_status()
                 return resp.json()
             for exec_id in execution_ids:
                 files = [(key, (None, str(value))) for key, value in on_resume.items()]
-                resp = await client.post(f"executions/{exec_id}/resume", files=files)
+                resp = await client.post(f"/executions/{exec_id}/resume", files=files)
                 if resp.status_code == 204:
                     results[exec_id] = {}
                 else:

@@ -1,4 +1,4 @@
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 import httpx
 from typing import Annotated
 from pydantic import Field
@@ -26,7 +26,7 @@ def register_namespace_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 description="Whether to only include namespaces with at least one flow. Default is False."
             ),
         ] = False,
-    ) -> list:
+    ) -> dict:
         """List all existing namespaces, with an option to only include those with flows.
         Optionally filter by a text query. Handles pagination automatically.
 
@@ -38,7 +38,7 @@ def register_namespace_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         if with_flows_only:
             resp = await client.get("/flows/distinct-namespaces")
             resp.raise_for_status()
-            return resp.json()
+            return {"results": resp.json()}
 
         all_namespaces: list[str] = []
         page = 1
@@ -65,29 +65,30 @@ def register_namespace_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 break
             page += 1
 
-        return all_namespaces
+        return {"results": all_namespaces}
 
     @mcp.tool()
     async def list_flows_in_namespace(
         namespace: Annotated[
             str, Field(description="The namespace to list flows from")
         ],
-    ) -> list:
+    ) -> dict:
         """Retrieve all flows in a given namespace."""
         resp = await client.get(f"/flows/{namespace}")
         resp.raise_for_status()
-        return resp.json()
+        return {"results": resp.json()}
 
     @mcp.tool()
     async def list_namespace_dependencies(
         namespace: Annotated[
             str, Field(description="The namespace to list dependencies from")
         ],
-    ) -> str:
+    ) -> dict:
         """Retrieve all flow-to-flow dependencies within a given namespace and render them as an ASCII dependency graph **using only the flow IDs**. Always return the legend after the graph."""
         resp = await client.get(f"/namespaces/{namespace}/dependencies")
         resp.raise_for_status()
-        return await _render_dependencies(
+        graph = await _render_dependencies(
             resp.json(),
             "Flows listed without arrows have no dependencies within this namespace.",
         )
+        return {"result": graph}

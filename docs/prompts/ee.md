@@ -12,23 +12,10 @@ Delete the app with UID "my-app-uid".
 Search for apps in namespace "dev".
 Search for apps with the tag "production".
 
-List all worker groups.
-Create a worker group with key "group1" and description "Main group".
-Get details for the worker group with ID "abc123".
-Update the worker group with ID "abc123" to have key "group1" and description "Updated group".
-Delete the worker group with ID "abc123".
-
-Enter maintenance mode.
-Exit maintenance mode.
-
 List all announcements.
 Create an announcement with message "System maintenance", type "WARNING", start date "2025-12-28T00:00:00Z", and end date "2025-12-30T00:00:00Z".
 Update the announcement with ID "banner1" to message "Maintenance extended", type "WARNING", start date "2025-12-30T00:00:00Z", and end date "2025-12-31T00:00:00Z".
 Delete the announcement with ID "banner1".
-
-Search for users with the email "alice@example.com".
-List all users in the tenant "main".
-Search for users with superadmin permission.
 
 ---
 
@@ -90,3 +77,9 @@ testCases:
         description: Unreachable URL as expected
 
 Run the unit test test_microservices_workflow in the tutorial namespace
+
+Generate a unit test for the flow hello-world in namespace tutorial
+Generate a unit test for the flow hello-world in namespace tutorial and auto-create it
+
+Generate an app that lets users trigger the hello-world flow with a form
+Generate an app for monitoring executions in the tutorial namespace and auto-create it

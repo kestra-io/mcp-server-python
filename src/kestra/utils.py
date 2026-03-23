@@ -1,5 +1,6 @@
 from typing import Dict, List, Set
 from datetime import datetime
+from difflib import SequenceMatcher
 import httpx
 import re
 
@@ -81,12 +82,46 @@ async def _render_dependencies(data: dict, legend_text: str) -> str:
     return "\n".join(output_lines + legend)
 
 
+def _normalize_for_matching(text: str) -> str:
+    """Lowercase, collapse separators (spaces/hyphens/dots) to underscore, strip non-alphanumeric."""
+    text = text.lower().strip()
+    text = re.sub(r"[\s\-\.]+", "_", text)
+    text = re.sub(r"[^a-z0-9_]", "", text)
+    return text
+
+
+def _score_flow_match(query: str, flow_id: str, namespace: str = "") -> float:
+    """Score 0.0–1.0 how well a user query matches a flow ID.
+
+    Exact normalized match → 1.0, substring containment → 0.9,
+    otherwise SequenceMatcher ratio with a small namespace bonus.
+    """
+    nq = _normalize_for_matching(query)
+    nid = _normalize_for_matching(flow_id)
+
+    if nq == nid:
+        return 1.0
+
+    if nq in nid or nid in nq:
+        return 0.9
+
+    score = SequenceMatcher(None, nq, nid).ratio()
+
+    if namespace:
+        nns = _normalize_for_matching(namespace)
+        if nq in nns:
+            score = min(score + 0.05, 1.0)
+
+    return score
+
+
 async def get_latest_execution(
     client: httpx.AsyncClient, namespace: str, flow_id: str, state: str = None
 ) -> dict:
-    resp = await client.get(
-        "/executions", params={"namespace": namespace, "flowId": flow_id}
-    )
+    params = {"namespace": namespace, "flowId": flow_id, "size": 25}
+    if state:
+        params["state"] = state
+    resp = await client.get("/executions", params=params)
     resp.raise_for_status()
     data = resp.json()
 
@@ -97,6 +132,7 @@ async def get_latest_execution(
     else:
         executions = []
 
+    # Double-check state filter in case API doesn't support it
     if state:
         executions = [
             e for e in executions if e.get("state", {}).get("current") == state

@@ -1,4 +1,4 @@
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 import httpx
 from typing import Annotated
 from pydantic import Field
@@ -48,7 +48,7 @@ def register_replay_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             )
             resp.raise_for_status()
             result = resp.json()
-            return f"Replayed execution {exec_id} for flow '{flow_id}' in namespace '{namespace}'.\nResult: {result}"
+            return {"message": f"Replayed execution {exec_id} for flow '{flow_id}' in namespace '{namespace}'.", "result": result}
         else:
             params: dict[str, bool] = {}
             if latest_revision:

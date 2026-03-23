@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 import httpx
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 import os
 import logging
 
