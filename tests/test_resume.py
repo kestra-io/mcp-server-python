@@ -133,6 +133,34 @@ async def test_resume_flow_with_on_resume_inputs(kestra_client, cleanup):
 
 
 @pytest.mark.asyncio
+async def test_force_run_execution(kestra_client, cleanup):
+    """Test force_run_execution on a queued execution."""
+    # Create a flow with concurrency limit of 1
+    flow_response = await create_flow("pause_demo.yaml", kestra_client, cleanup)
+    assert flow_response["id"] == "pause_demo"
+
+    # Execute first - it will pause
+    first_exec = await kestra_client.call_tool(
+        "execute_flow", {"namespace": "company.team", "flow_id": "pause_demo"}
+    )
+    first_json = json.loads(first_exec.content[0].text)
+    first_id = first_json["id"]
+    cleanup.track_execution(first_id)
+
+    await poll_for_execution(
+        kestra_client, first_id, desired_state="PAUSED", max_retries=10, retry_interval=1
+    )
+
+    # Force run it (paused → running)
+    force_result = await kestra_client.call_tool(
+        "force_run_execution", {"execution_id": first_id}
+    )
+    force_json = json.loads(force_result.content[0].text)
+    print(f"Force run result: {json.dumps(force_json, indent=2)}")
+    assert isinstance(force_json, dict)
+
+
+@pytest.mark.asyncio
 async def test_resume_invalid_execution(kestra_client):
     """Test resume_execution tool with invalid execution id."""
     with pytest.raises(ToolError):

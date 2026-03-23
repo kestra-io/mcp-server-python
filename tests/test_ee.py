@@ -787,6 +787,40 @@ async def test_invite_users(kestra_client):
 
 
 @pytest.mark.asyncio
+async def test_manage_invitations(kestra_client):
+    if EE_TOOLS_DISABLED:
+        pytest.skip("EE tools are disabled")
+    """Test manage_invitations get and delete actions."""
+    client = kestra_client
+    test_emails = ["test-inv-mgmt@kestra.io"]
+    await _cleanup_test_user_access(test_emails)
+
+    # Create an invitation to work with
+    result = await client.call_tool(
+        "invite_user", {"email": "test-inv-mgmt@kestra.io"}
+    )
+    response = json.loads(result.content[0].text)
+    invite_id = response.get("id")
+    assert invite_id is not None, f"Expected invitation id, got: {response}"
+
+    # Test get action
+    get_result = await client.call_tool(
+        "manage_invitations", {"action": "get", "id_": invite_id}
+    )
+    get_response = json.loads(get_result.content[0].text)
+    assert get_response["id"] == invite_id
+    assert get_response["email"] == "test-inv-mgmt@kestra.io"
+
+    # Test delete action
+    del_result = await client.call_tool(
+        "manage_invitations", {"action": "delete", "id_": invite_id}
+    )
+    # Delete returns empty dict on success
+    del_response = json.loads(del_result.content[0].text)
+    assert isinstance(del_response, dict)
+
+
+@pytest.mark.asyncio
 async def test_license_info(kestra_client):
     if EE_TOOLS_DISABLED:
         pytest.skip("EE tools are disabled")

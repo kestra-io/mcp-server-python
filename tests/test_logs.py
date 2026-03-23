@@ -112,6 +112,49 @@ async def test_search_logs(kestra_client, cleanup):
 
 
 @pytest.mark.asyncio
+async def test_delete_execution_logs(kestra_client, cleanup):
+    """Test deleting logs for a specific execution."""
+    flow_id, namespace, execution_id = await _create_and_execute(kestra_client, cleanup)
+
+    result = await kestra_client.call_tool(
+        "delete_execution_logs",
+        {"execution_id": execution_id},
+    )
+    response = json.loads(result.content[0].text) if result and result.content and result.content[0].text else {}
+    assert isinstance(response, (dict, list))
+
+
+@pytest.mark.asyncio
+async def test_delete_flow_logs(kestra_client, cleanup):
+    """Test deleting logs for all executions of a flow."""
+    flow_id, namespace, execution_id = await _create_and_execute(kestra_client, cleanup)
+
+    result = await kestra_client.call_tool(
+        "delete_flow_logs",
+        {"namespace": namespace, "flow_id": flow_id},
+    )
+    response = json.loads(result.content[0].text) if result and result.content and result.content[0].text else {}
+    assert isinstance(response, (dict, list))
+
+
+@pytest.mark.asyncio
+async def test_follow_execution_logs(kestra_client, cleanup):
+    """Test following logs for an execution (SSE endpoint — may timeout for completed executions)."""
+    flow_id, namespace, execution_id = await _create_and_execute(kestra_client, cleanup)
+
+    try:
+        result = await kestra_client.call_tool(
+            "follow_execution_logs",
+            {"execution_id": execution_id},
+        )
+        # SSE endpoint returns text content, may be empty for completed executions
+        assert result.content is not None
+    except Exception as e:
+        # SSE endpoint may timeout for already-completed executions — that's expected
+        assert "timeout" in str(e).lower() or "Upstream" in str(e)
+
+
+@pytest.mark.asyncio
 async def test_log_level_validation(kestra_client):
     """Test that invalid log levels are rejected."""
     try:

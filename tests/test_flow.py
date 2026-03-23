@@ -87,3 +87,39 @@ async def test_find_flow(kestra_client, cleanup):
     )
     response3 = json.loads(result3.content[0].text)
     assert response3["found"] is False
+
+
+@pytest.mark.asyncio
+async def test_search_flows(kestra_client, cleanup):
+    """Test search_flows tool."""
+    await create_flow("hello_mcp.yaml", kestra_client, cleanup)
+
+    result = await kestra_client.call_tool(
+        "search_flows", {"query": "hello_mcp"}
+    )
+    response = json.loads(result.content[0].text)
+    assert "results" in response
+    assert len(response["results"]) > 0
+    assert any(f["id"] == "hello_mcp" for f in response["results"])
+
+
+@pytest.mark.asyncio
+async def test_list_flows_with_triggers(kestra_client, cleanup):
+    """Test list_flows_with_triggers tool."""
+    await create_flow("scheduled_flow.yaml", kestra_client, cleanup)
+
+    result = await kestra_client.call_tool(
+        "list_flows_with_triggers", {"namespace": "company.team"}
+    )
+    response = json.loads(result.content[0].text)
+    # Response may be a list or {"results": [...]}
+    if isinstance(response, dict) and "results" in response:
+        items = response["results"]
+    elif isinstance(response, list):
+        items = response
+    else:
+        items = [response]
+    assert len(items) > 0
+    # Items are markdown strings describing flows with triggers
+    combined = "\n".join(str(i) for i in items)
+    assert "scheduled_flow" in combined
