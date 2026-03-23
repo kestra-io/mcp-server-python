@@ -118,9 +118,10 @@ def _score_flow_match(query: str, flow_id: str, namespace: str = "") -> float:
 async def get_latest_execution(
     client: httpx.AsyncClient, namespace: str, flow_id: str, state: str = None
 ) -> dict:
-    resp = await client.get(
-        "/executions", params={"namespace": namespace, "flowId": flow_id}
-    )
+    params = {"namespace": namespace, "flowId": flow_id, "size": 25}
+    if state:
+        params["state"] = state
+    resp = await client.get("/executions", params=params)
     resp.raise_for_status()
     data = resp.json()
 
@@ -131,6 +132,7 @@ async def get_latest_execution(
     else:
         executions = []
 
+    # Double-check state filter in case API doesn't support it
     if state:
         executions = [
             e for e in executions if e.get("state", {}).get("current") == state

@@ -524,10 +524,12 @@ async def test_manage_announcements(kestra_client):
 
     # Test case 2: List announcements
     result = await client.call_tool("manage_announcements", {"action": "list"})
-    # Parse all announcements using list comprehension
-    announcements = [
-        json.loads(item.text) for item in result.content if hasattr(item, "text")
-    ]
+    raw = json.loads(result.content[0].text)
+    # Handle both flat list and nested list (single content item containing array)
+    announcements = raw if isinstance(raw, list) else [raw]
+    # Flatten if nested: [[ann1, ann2]] → [ann1, ann2]
+    if announcements and isinstance(announcements[0], list):
+        announcements = announcements[0]
     print("List announcements response:", announcements)
 
     # Verify list response structure
