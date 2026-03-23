@@ -4,7 +4,9 @@
 # Usage: ./tests/run_all_versions.sh [pytest args]
 # Example: ./tests/run_all_versions.sh -v -x  (verbose, stop on first failure)
 #
-# Required environment variables (set in your shell or .env):
+# Reads credentials from .env in the project root (auto-loaded) or from your shell env.
+#
+# Required environment variables:
 #   EE instances:   KESTRA_API_TOKEN_EE_DEVELOP, KESTRA_API_TOKEN_EE_LATEST
 #   OSS instances:  KESTRA_USERNAME_OSS_DEVELOP, KESTRA_PASSWORD_OSS_DEVELOP,
 #                   KESTRA_USERNAME_OSS_LATEST,  KESTRA_PASSWORD_OSS_LATEST
@@ -22,10 +24,23 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 RESULTS_DIR="$ROOT_DIR/.test-results"
 mkdir -p "$RESULTS_DIR"
 
+# ── Load .env if present ─────────────────────────────────────────────────────
+if [[ -f "$ROOT_DIR/.env" ]]; then
+  set -a
+  source "$ROOT_DIR/.env"
+  set +a
+fi
+
 PASS_COUNT=0
 FAIL_COUNT=0
 SKIP_COUNT=0
 SUMMARY=""
+
+# ── Helper: uppercase a string (macOS ships Bash 3, which lacks ${VAR^^}) ──
+to_upper() { echo "$1" | tr '[:lower:]' '[:upper:]'; }
+
+# ── Helper: resolve env var by name ──────────────────────────────────────────
+env_val() { eval echo "\${$1:-}"; }
 
 # ── Helper: run tests for one instance ───────────────────────────────────────
 run_instance() {
@@ -35,26 +50,27 @@ run_instance() {
   local AUTH_TYPE="$4"      # "token" or "basic"
   local DISABLED_TOOLS="$5" # "" or "ee"
 
-  # Auth env var names depend on the instance
-  local TOKEN_VAR="KESTRA_API_TOKEN_${NAME^^}"    # e.g. KESTRA_API_TOKEN_EE_DEVELOP
-  local USER_VAR="KESTRA_USERNAME_${NAME^^}"
-  local PASS_VAR="KESTRA_PASSWORD_${NAME^^}"
-  TOKEN_VAR="${TOKEN_VAR//-/_}"
-  USER_VAR="${USER_VAR//-/_}"
-  PASS_VAR="${PASS_VAR//-/_}"
+  # Build env var names: ee-develop -> EE_DEVELOP, then KESTRA_API_TOKEN_EE_DEVELOP
+  local SUFFIX
+  SUFFIX="$(to_upper "$NAME" | tr '-' '_')"
+  local TOKEN_VAR="KESTRA_API_TOKEN_${SUFFIX}"
+  local USER_VAR="KESTRA_USERNAME_${SUFFIX}"
+  local PASS_VAR="KESTRA_PASSWORD_${SUFFIX}"
 
   # Check required auth
-  if [[ "$AUTH_TYPE" == "token" && -z "${!TOKEN_VAR:-}" ]]; then
+  if [[ "$AUTH_TYPE" == "token" && -z "$(env_val "$TOKEN_VAR")" ]]; then
     echo "⏭  $NAME — $TOKEN_VAR not set, skipping"
     SKIP_COUNT=$((SKIP_COUNT + 1))
     SUMMARY+="⏭  $NAME — skipped ($TOKEN_VAR not set)\n"
     return
   fi
-  if [[ "$AUTH_TYPE" == "basic" && ( -z "${!USER_VAR:-}" || -z "${!PASS_VAR:-}" ) ]]; then
-    echo "⏭  $NAME — $USER_VAR/$PASS_VAR not set, skipping"
-    SKIP_COUNT=$((SKIP_COUNT + 1))
-    SUMMARY+="⏭  $NAME — skipped (credentials not set)\n"
-    return
+  if [[ "$AUTH_TYPE" == "basic" ]]; then
+    if [[ -z "$(env_val "$USER_VAR")" || -z "$(env_val "$PASS_VAR")" ]]; then
+      echo "⏭  $NAME — $USER_VAR/$PASS_VAR not set, skipping"
+      SKIP_COUNT=$((SKIP_COUNT + 1))
+      SUMMARY+="⏭  $NAME — skipped (credentials not set)\n"
+      return
+    fi
   fi
 
   # Check if the instance is reachable
@@ -79,10 +95,10 @@ run_instance() {
   # Auth
   unset KESTRA_API_TOKEN KESTRA_USERNAME KESTRA_PASSWORD 2>/dev/null || true
   if [[ "$AUTH_TYPE" == "token" ]]; then
-    export KESTRA_API_TOKEN="${!TOKEN_VAR}"
+    export KESTRA_API_TOKEN="$(env_val "$TOKEN_VAR")"
   elif [[ "$AUTH_TYPE" == "basic" ]]; then
-    export KESTRA_USERNAME="${!USER_VAR}"
-    export KESTRA_PASSWORD="${!PASS_VAR}"
+    export KESTRA_USERNAME="$(env_val "$USER_VAR")"
+    export KESTRA_PASSWORD="$(env_val "$PASS_VAR")"
   fi
 
   REPORT="$RESULTS_DIR/$NAME.txt"
@@ -107,7 +123,7 @@ echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  SUMMARY: $PASS_COUNT passed, $FAIL_COUNT failed, $SKIP_COUNT skipped"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo -e "$SUMMARY"
+printf '%b' "$SUMMARY"
 
 # Exit with failure if any instance failed
 [[ $FAIL_COUNT -eq 0 ]]
