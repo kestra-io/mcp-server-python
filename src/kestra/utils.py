@@ -121,7 +121,7 @@ async def get_latest_execution(
     params = {"namespace": namespace, "flowId": flow_id, "size": 25}
     if state:
         params["state"] = state
-    resp = await client.get("/executions", params=params)
+    resp = await client.get("/executions/search", params=params)
     resp.raise_for_status()
     data = resp.json()
 

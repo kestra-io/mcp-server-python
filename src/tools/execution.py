@@ -282,7 +282,7 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
 
         # If we only need one execution, we can optimize by using a smaller page size
         if count == 1:
-            page_size = 10  # Small page size is sufficient for finding the latest
+            page_size = 25  # Minimum safe page size for the Kestra API
 
         while True:
             params: dict[str, Any] = {
@@ -293,7 +293,7 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             if flow_id:
                 params["flowId"] = flow_id
 
-            resp = await client.get("/executions", params=params)
+            resp = await client.get("/executions/search", params=params)
             resp.raise_for_status()
             data = resp.json()
 
