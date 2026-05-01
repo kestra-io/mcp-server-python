@@ -2,6 +2,7 @@ from fastmcp import FastMCP
 import httpx
 from typing import Annotated, Any, Literal, List
 from pydantic import Field
+import re
 from datetime import datetime, timedelta, timezone
 from kestra.utils import _parse_iso
 from kestra.constants import (
@@ -9,6 +10,24 @@ from kestra.constants import (
     _TERMINAL_STATES,
     _RESERVED_FLOW_IDS,
 )
+
+
+def _parse_iso_duration(duration: str) -> timedelta:
+    """Parse a simple ISO 8601 duration (PnD, PTnH, PTnM, PnDTnHnM) into a timedelta."""
+    m = re.fullmatch(
+        r"P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?",
+        duration.strip(),
+    )
+    if not m or not any(m.groups()):
+        raise ValueError(
+            f"Unsupported ISO 8601 duration: {duration!r}. "
+            "Use formats like 'P30D', 'P7D', 'PT5M', 'PT1H'."
+        )
+    days = int(m.group(1) or 0)
+    hours = int(m.group(2) or 0)
+    minutes = int(m.group(3) or 0)
+    seconds = int(m.group(4) or 0)
+    return timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
 
 
 def _normalize_labels(labels) -> list[dict]:
@@ -241,15 +260,32 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         count: Annotated[
             int,
             Field(
-                description="Optional number of most recent executions to return. If None, returns all executions"
+                description="Optional number of most recent executions to return. If None, returns all executions within the date range."
             ),
         ] = None,
-        minutes: Annotated[
-            int,
+        time_range: Annotated[
+            str,
             Field(
-                description="Optional time window in minutes to filter executions. If None, no time filtering"
+                description=(
+                    "Relative time range as an ISO 8601 duration, e.g. 'P30D' for the last 30 days, "
+                    "'P7D' for the last 7 days, 'PT5M' for the last 5 minutes, 'PT1H' for the last hour. "
+                    "Defaults to 'P90D' (last 90 days) when no date filter is provided. "
+                    "Use start_date/end_date instead for an absolute date range."
+                )
             ),
-        ] = None,
+        ] = "",
+        start_date: Annotated[
+            str,
+            Field(
+                description="Absolute start of the date range in ISO 8601 format, e.g. '2025-04-01T00:00:00Z'. Takes precedence over time_range."
+            ),
+        ] = "",
+        end_date: Annotated[
+            str,
+            Field(
+                description="Absolute end of the date range in ISO 8601 format, e.g. '2025-04-30T23:59:59Z'. Only used with start_date."
+            ),
+        ] = "",
         page_size: Annotated[
             int,
             Field(
@@ -280,9 +316,30 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         all_execs: List[dict] = []
         page = 1
 
-        # If we only need one execution, we can optimize by using a smaller page size
-        if count == 1:
-            page_size = 25  # Minimum safe page size for the Kestra API
+        # Resolve the startDate sent to the API.
+        # We always compute an explicit startDate rather than relying on the API's
+        # `timeRange` query param, which (a) may not be supported as a flat param
+        # and (b) uses exact-hour arithmetic that silently excludes boundary days.
+        # For day-granularity ranges we snap to midnight so "last 10 days" includes
+        # the whole of the day 10 days ago, not just the past 240 hours.
+        now = datetime.now(timezone.utc)
+        if start_date:
+            effective_start_date = start_date
+        elif time_range:
+            delta = _parse_iso_duration(time_range)
+            point = now - delta
+            # Day-only durations (no sub-day component): snap back to midnight so the
+            # entire boundary day is included rather than just the last N*24 hours.
+            if delta.seconds == 0 and delta.microseconds == 0:
+                point = point.replace(hour=0, minute=0, second=0, microsecond=0)
+            effective_start_date = point.strftime("%Y-%m-%dT%H:%M:%SZ")
+        else:
+            # Default: start of day 90 days ago
+            effective_start_date = (
+                (now - timedelta(days=90))
+                .replace(hour=0, minute=0, second=0, microsecond=0)
+                .strftime("%Y-%m-%dT%H:%M:%SZ")
+            )
 
         while True:
             params: dict[str, Any] = {
@@ -292,6 +349,9 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             }
             if flow_id:
                 params["flowId"] = flow_id
+            params["startDate"] = effective_start_date
+            if end_date:
+                params["endDate"] = end_date
 
             resp = await client.get("/executions/search", params=params)
             resp.raise_for_status()
@@ -303,28 +363,39 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
 
             all_execs.extend(batch)
 
-            # If we have enough executions to satisfy the count requirement, we can stop
-            if count is not None and len(all_execs) >= count:
-                break
-
             # If we got fewer results than requested, we've reached the end
             if len(batch) < page_size:
                 break
 
             page += 1
 
-        # Apply time filtering if requested
-        if minutes is not None:
-            cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
-            all_execs = [
-                e for e in all_execs if _parse_iso(e["state"]["startDate"]) >= cutoff
-            ]
-
-        # Sort by startDate in descending order (newest first)
+        # Sort client-side — the search endpoint doesn't accept a sort param reliably
         all_execs.sort(key=lambda e: _parse_iso(e["state"]["startDate"]), reverse=True)
 
         # Return only the requested number of executions
         if count is not None:
             all_execs = all_execs[:count]
 
-        return {"results": all_execs}
+        # Trim each execution to only the fields needed — full objects include
+        # taskRunList, outputs, metadata, etc. which bloat the response significantly.
+        def _slim(e: dict) -> dict:
+            state = e.get("state", {})
+            slim: dict[str, Any] = {
+                "id": e.get("id"),
+                "namespace": e.get("namespace"),
+                "flowId": e.get("flowId"),
+                "state": {
+                    "current": state.get("current"),
+                    "startDate": state.get("startDate"),
+                    "endDate": state.get("endDate"),
+                },
+            }
+            if "durationSeconds" in e:
+                slim["durationSeconds"] = e["durationSeconds"]
+            if e.get("inputs"):
+                slim["inputs"] = e["inputs"]
+            if e.get("labels"):
+                slim["labels"] = e["labels"]
+            return slim
+
+        return {"results": [_slim(e) for e in all_execs]}
