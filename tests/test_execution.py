@@ -230,14 +230,14 @@ async def test_list_executions(kestra_client, cleanup):
         assert execution["namespace"] == "company.team"
         assert execution["flowId"] == "get_data"
 
-    # Test case 2: List two recent executions within last 15 minutes
+    # Test case 2: List two recent executions within last 1 day
     result = await kestra_client.call_tool(
         "list_executions",
         {
             "namespace": "company.team",
             "flow_id": "get_data",
             "count": 2,
-            "minutes": 15,
+            "time_range": "P1D",
         },
     )
     response_json = json.loads(result.content[0].text) if result and result.content and result.content[0].text else {}
@@ -259,12 +259,12 @@ async def test_list_executions(kestra_client, cleanup):
         for execution in executions:
             assert execution["namespace"] == "company.team"
             assert execution["flowId"] == "get_data"
-            # Verify execution is within last 15 minutes
+            # Verify execution is within last 1 day
             start_date = datetime.fromisoformat(
                 execution["state"]["startDate"].replace("Z", "+00:00")
             )
             time_diff = datetime.now(timezone.utc) - start_date
-            assert time_diff.total_seconds() <= 15 * 60  # 15 minutes in seconds
+            assert time_diff.total_seconds() <= 24 * 60 * 60  # 1 day in seconds
 
     # Test case 3: List latest execution
     result = await kestra_client.call_tool(
@@ -421,7 +421,7 @@ async def test_execute_flow_with_subflow(kestra_client, cleanup):
     while retry_count < max_retries and subflow_execution_id is None:
         result = await kestra_client.call_tool(
             "list_executions",
-            {"namespace": "company.team", "flow_id": "hello_mcp", "minutes": 5},
+            {"namespace": "company.team", "flow_id": "hello_mcp", "time_range": "PT5M"},
         )
         response_json = (
             json.loads(result.content[0].text) if result and result.content and result.content[0].text else {}
