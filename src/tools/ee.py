@@ -6,6 +6,7 @@ import yaml
 from typing import Annotated, List, Literal, Optional
 from pydantic import Field
 import os
+from kestra.compat import apps_search_params
 from kestra.utils import _root_api_url
 
 
@@ -357,17 +358,16 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         flowId: Annotated[Optional[str], Field(description="The flowId to filter by.")] = None,
     ):
         """List existing apps, optionally filtered by namespace, flowId, tags, or full-text search string."""
-        params = {"page": page, "size": size}
-        if sort:
-            params["sort"] = sort
-        if tags:
-            params["tags"] = tags
-        if q:
-            params["q"] = q
-        if namespace:
-            params["namespace"] = namespace
-        if flowId:
-            params["flowId"] = flowId
+        params = await apps_search_params(
+            client,
+            query=q,
+            namespace=namespace,
+            flow_id=flowId,
+            tags=tags,
+            sort=sort,
+            page=page,
+            size=size,
+        )
         resp = await client.get("/apps/search", params=params)
         resp.raise_for_status()
         return resp.json()

@@ -123,6 +123,26 @@ Paste the following configuration into your MCP settings (e.g., Cursor, Claude, 
 
 ---
 
+### Kestra version support
+
+Both Kestra 1.x and Kestra 2.x are supported by the same image, and nothing has to be configured for either.
+
+Several endpoints were changed in Kestra 2.0. The execution actions were moved under `/actions/`, the per-endpoint search parameters were replaced by the unified `filters[field][OPERATION]` model, backfill creation was moved to `/triggers/backfill/create`, and KV listing was moved to `GET /kv`. A 1.x query parameter sent to a 2.x server is ignored rather than rejected, so a request can appear to succeed while the results come back unfiltered.
+
+The server version is read once from `GET /api/v1/configs` on the first tool call and every request is then built for that major. Where that endpoint is unreachable, behind a proxy that does not forward it for instance, the major can be set explicitly:
+
+```dotenv
+# 1, 2, or a full version such as 1.3.3 or 2.0.1
+KESTRA_API_VERSION=2
+```
+
+Two differences between the majors remain visible in the tool output:
+
+- **Dashboards** - from 2.0 on, dashboards can only be created over the API in the Enterprise Edition, so `generate_dashboard` with `auto_create` returns the generated YAML together with a warning on OSS 2.x.
+- **Namespace file moves** - on Kestra 2.x, a file written to a path that was previously moved away is stored under a versioned name, and a later move of that path fails with a 500. The error is reported with the suggestion to delete and re-upload instead.
+
+---
+
 ### Available Tools
 
 - 🔄 backfill

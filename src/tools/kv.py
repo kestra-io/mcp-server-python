@@ -5,6 +5,8 @@ from pydantic import Field
 import json
 import re
 
+from kestra.compat import list_kv_keys
+
 # Pre-compiled patterns for date/datetime detection in KV values
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:Z)?$")
@@ -58,9 +60,7 @@ def register_kv_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             return {"status": "ok"}
 
         elif action == "list":
-            resp = await client.get(f"/namespaces/{namespace}/kv")
-            resp.raise_for_status()
-            return {"results": resp.json()}
+            return {"results": await list_kv_keys(client, namespace)}
 
         elif action == "delete":
             if not key:

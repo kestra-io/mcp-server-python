@@ -4,6 +4,7 @@ import yaml
 import uuid
 from typing import Annotated, List, Literal
 from pydantic import Field
+from kestra.compat import flows_search_params, supports_dashboard_crud
 from kestra.utils import _render_dependencies, _score_flow_match
 from kestra.constants import _RESERVED_FLOW_IDS
 
@@ -35,9 +36,9 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         - Flow {{id}} in the namespace {{namespace}}
 
         Do not return other metadata in the result."""
-        resp = await client.get(
-            "/flows/search", params={"query": query, "size": size, "page": page}
-        )
+        params = await flows_search_params(client, query=query, size=size, page=page)
+        resp = await client.get("/flows/search", params=params)
+        resp.raise_for_status()
         return resp.json()
 
     @mcp.tool()
@@ -61,9 +62,9 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
 
         If exactly one strong match is found, returns it directly.
         If multiple matches exist, returns a ranked list for the user to pick from."""
-        params: dict = {"q": query, "size": 20, "page": 1}
-        if namespace:
-            params["namespace"] = namespace
+        params = await flows_search_params(
+            client, query=query, namespace=namespace or None, size=20, page=1
+        )
 
         resp = await client.get("/flows/search", params=params)
         resp.raise_for_status()
@@ -396,6 +397,15 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         generated_yaml = resp.text
 
         if auto_create:
+            if not await supports_dashboard_crud(client):
+                return {
+                    "result": generated_yaml,
+                    "warning": (
+                        "The dashboard was generated but not created: creating "
+                        "dashboards over the API needs the Enterprise Edition from "
+                        "Kestra 2.0 on. Paste the YAML into the Dashboards page instead."
+                    ),
+                }
             headers = {"Content-Type": "application/x-yaml"}
             create_resp = await client.post("/dashboards", content=generated_yaml, headers=headers)
             create_resp.raise_for_status()

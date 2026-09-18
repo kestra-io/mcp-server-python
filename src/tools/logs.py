@@ -3,6 +3,8 @@ import httpx
 from typing import Annotated, Any, List, Literal, Optional
 from pydantic import Field
 
+from kestra.compat import execution_logs_params, logs_search_params
+
 
 def register_logs_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
     @mcp.tool()
@@ -57,15 +59,13 @@ def register_logs_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 f"Invalid min_level '{min_level}'. Must be one of: {', '.join(sorted(valid_levels))}"
             )
 
-        params = {}
-        if min_level:
-            params["minLevel"] = min_level
-        if task_run_id:
-            params["taskRunId"] = task_run_id
-        if task_id:
-            params["taskId"] = task_id
-        if attempt is not None:
-            params["attempt"] = attempt
+        params = await execution_logs_params(
+            client,
+            min_level=min_level,
+            task_id=task_id,
+            task_run_id=task_run_id,
+            attempt=attempt,
+        )
 
         resp = await client.get(f"/logs/{execution_id}", params=params)
         resp.raise_for_status()
@@ -112,15 +112,13 @@ def register_logs_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 f"Invalid min_level '{min_level}'. Must be one of: {', '.join(sorted(valid_levels))}"
             )
 
-        params = {}
-        if min_level:
-            params["minLevel"] = min_level
-        if task_run_id:
-            params["taskRunId"] = task_run_id
-        if task_id:
-            params["taskId"] = task_id
-        if attempt is not None:
-            params["attempt"] = attempt
+        params = await execution_logs_params(
+            client,
+            min_level=min_level,
+            task_id=task_id,
+            task_run_id=task_run_id,
+            attempt=attempt,
+        )
 
         resp = await client.get(f"/logs/{execution_id}/download", params=params)
         resp.raise_for_status()
@@ -188,23 +186,17 @@ def register_logs_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 f"Invalid min_level '{min_level}'. Must be one of: {', '.join(sorted(valid_levels))}"
             )
 
-        params = {
-            "page": page,
-            "size": size,
-        }
-        
-        if query:
-            params["q"] = query
-        if namespace:
-            params["namespace"] = namespace
-        if flow_id:
-            params["flowId"] = flow_id
-        if min_level:
-            params["minLevel"] = min_level
-        if start_date:
-            params["startDate"] = start_date
-        if end_date:
-            params["endDate"] = end_date
+        params = await logs_search_params(
+            client,
+            query=query,
+            namespace=namespace,
+            flow_id=flow_id,
+            min_level=min_level,
+            start_date=start_date,
+            end_date=end_date,
+            page=page,
+            size=size,
+        )
 
         resp = await client.get("/logs/search", params=params)
         resp.raise_for_status()
@@ -326,9 +318,7 @@ def register_logs_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 f"Invalid min_level '{min_level}'. Must be one of: {', '.join(sorted(valid_levels))}"
             )
 
-        params = {}
-        if min_level:
-            params["minLevel"] = min_level
+        params = await execution_logs_params(client, min_level=min_level)
 
         resp = await client.get(f"/logs/{execution_id}/follow", params=params)
         resp.raise_for_status()

@@ -6,14 +6,20 @@
 #
 # Reads credentials from .env in the project root (auto-loaded) or from your shell env.
 #
+# Cover at least one Kestra 1.x and one Kestra 2.x instance: the two majors speak
+# different search and execution-action dialects, and a 1.x parameter sent to a
+# 2.x server is ignored rather than rejected, so only a real run catches it.
+#
 # Required environment variables:
-#   EE instances:   KESTRA_API_TOKEN_EE_DEVELOP, KESTRA_API_TOKEN_EE_LATEST
+#   EE instances:   KESTRA_API_TOKEN_EE_DEVELOP, KESTRA_API_TOKEN_EE_LATEST,
+#                   KESTRA_API_TOKEN_EE_PREVIOUS
 #   OSS instances:  KESTRA_USERNAME_OSS_DEVELOP, KESTRA_PASSWORD_OSS_DEVELOP,
 #                   KESTRA_USERNAME_OSS_LATEST,  KESTRA_PASSWORD_OSS_LATEST
 #
 # Optional overrides (with defaults):
 #   KESTRA_BASE_URL_EE_DEVELOP   (default: http://localhost:28080/api/v1)
 #   KESTRA_BASE_URL_EE_LATEST    (default: http://localhost:18080/api/v1)
+#   KESTRA_BASE_URL_EE_PREVIOUS  (default: http://localhost:8080/api/v1)
 #   KESTRA_BASE_URL_OSS_DEVELOP  (default: http://localhost:48080/api/v1)
 #   KESTRA_BASE_URL_OSS_LATEST   (default: http://localhost:38080/api/v1)
 set -euo pipefail
@@ -91,6 +97,8 @@ run_instance() {
   export KESTRA_TENANT_ID="$TENANT"
   export KESTRA_BASE_URL="$BASE_URL"
   export KESTRA_MCP_DISABLED_TOOLS="${DISABLED_TOOLS:-}"
+  # Let the server detect the API version, which is what users get.
+  unset KESTRA_API_VERSION 2>/dev/null || true
 
   # Auth
   unset KESTRA_API_TOKEN KESTRA_USERNAME KESTRA_PASSWORD 2>/dev/null || true
@@ -117,6 +125,7 @@ run_instance "ee-develop"  "demo" "${KESTRA_BASE_URL_EE_DEVELOP:-http://localhos
 run_instance "oss-develop" "main" "${KESTRA_BASE_URL_OSS_DEVELOP:-http://localhost:48080/api/v1}" "basic" "ee"
 run_instance "ee-latest"   "demo" "${KESTRA_BASE_URL_EE_LATEST:-http://localhost:18080/api/v1}"   "token" ""
 run_instance "oss-latest"  "main" "${KESTRA_BASE_URL_OSS_LATEST:-http://localhost:38080/api/v1}"  "basic" "ee"
+run_instance "ee-previous" "demo" "${KESTRA_BASE_URL_EE_PREVIOUS:-http://localhost:8080/api/v1}"    "token" ""
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""

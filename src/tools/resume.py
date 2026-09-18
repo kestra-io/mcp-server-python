@@ -2,7 +2,8 @@ from fastmcp import FastMCP
 import httpx
 from typing import Annotated, List, Any, Dict, Optional
 from pydantic import Field
-from kestra.utils import _parse_iso
+from kestra.compat import execution_action_path, normalize_bulk_response
+from kestra.utils import get_latest_execution
 from kestra.constants import (
     _VALID_FORCE_STATES,
 )
@@ -50,10 +51,12 @@ def register_resume_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             if not on_resume:
                 resp = await client.post("/executions/resume/by-ids", json=execution_ids)
                 resp.raise_for_status()
-                return resp.json()
+                return normalize_bulk_response(resp.json())
             for exec_id in execution_ids:
                 files = [(key, (None, str(value))) for key, value in on_resume.items()]
-                resp = await client.post(f"/executions/{exec_id}/resume", files=files)
+                resp = await client.post(
+                    await execution_action_path(client, exec_id, "resume"), files=files
+                )
                 if resp.status_code == 204:
                     results[exec_id] = {}
                 else:
@@ -65,29 +68,12 @@ def register_resume_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 raise ValueError(
                     "If execution_ids is not provided, both namespace and flow_id are required."
                 )
-            params = {
-                "namespace": namespace,
-                "flowId": flow_id,
-                "state": "PAUSED",
-                "size": 100,
-                "sort": "state.startDate,desc",
-            }
-            resp = await client.get("/executions", params=params)
-            resp.raise_for_status()
-            data = resp.json()
-            if isinstance(data, dict):
-                executions = data.get("results") or data.get("content") or []
-            elif isinstance(data, list):
-                executions = data
-            else:
-                executions = []
-            if not executions:
+            latest = await get_latest_execution(client, namespace, flow_id, "PAUSED")
+            exec_id = latest.get("id")
+            if not exec_id:
                 raise ValueError(
-                    f"No paused executions found for {namespace}/{flow_id}. "
-                    f"Checked with params: {params}"
+                    f"No paused executions found for {namespace}/{flow_id}."
                 )
-            latest = max(executions, key=lambda e: _parse_iso(e["state"]["startDate"]))
-            exec_id = latest["id"]
             use_defaults = on_resume is None or (
                 isinstance(on_resume, dict) and len(on_resume) == 0
             )
@@ -112,13 +98,18 @@ def register_resume_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                         (key, (None, str(value))) for key, value in defaults.items()
                     ]
                     resp = await client.post(
-                        f"/executions/{exec_id}/resume", files=files
+                        await execution_action_path(client, exec_id, "resume"),
+                        files=files,
                     )
                 else:
-                    resp = await client.post(f"/executions/{exec_id}/resume")
+                    resp = await client.post(
+                        await execution_action_path(client, exec_id, "resume")
+                    )
             else:
                 files = [(key, (None, str(value))) for key, value in on_resume.items()]
-                resp = await client.post(f"/executions/{exec_id}/resume", files=files)
+                resp = await client.post(
+                    await execution_action_path(client, exec_id, "resume"), files=files
+                )
             if resp.status_code == 204:
                 results[exec_id] = {}
             else:
@@ -144,6 +135,8 @@ def register_resume_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 f"Cannot force-run execution `{execution_id}` because it's currently in `{current_state}` state."
             )
 
-        run_resp = await client.post(f"/executions/{execution_id}/force-run")
+        run_resp = await client.post(
+            await execution_action_path(client, execution_id, "force-run")
+        )
         run_resp.raise_for_status()
         return run_resp.json()

@@ -30,12 +30,16 @@ async def test_backfill(kestra_client, cleanup):
     response_json = json.loads(result.content[0].text)
     assert response_json["namespace"] == namespace
     assert response_json["flowId"] == flow_id
-    assert "backfill" in response_json
-    assert "start" in response_json["backfill"]
-    assert "end" in response_json["backfill"]
     assert response_json["triggerId"] == trigger_id
     assert response_json["disabled"] is False
-    assert response_json["backfill"]["paused"] is False
+    # A one-hour backfill can be executed before the response is built, and the
+    # block is cleared from the trigger once that happens.
+    if "backfill" in response_json:
+        assert "start" in response_json["backfill"]
+        assert "end" in response_json["backfill"]
+        assert response_json["backfill"]["paused"] is False
+    else:
+        assert response_json.get("executionId")
 
     await asyncio.sleep(3)  # wait for the backfill to complete
     await create_flow("scheduled_flow_disabled_trigger.yaml", kestra_client, cleanup)

@@ -1,7 +1,7 @@
 httpx==0.28.1
 pyyaml==6.0.3
 python-dotenv==1.2.2
-fastmcp>=3.0.0,<4
+fastmcp>=4.0.5,<5
 pydantic==2.12.5
 
 # for running tests locally, install pytest:

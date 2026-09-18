@@ -47,7 +47,15 @@ To validate cross-version compatibility, run tests against all configured instan
 ./tests/run_all_versions.sh -v -x  # verbose, stop on first failure
 ```
 
-The script loops through 4 Kestra instances (EE develop, OSS develop, EE latest, OSS latest), skips any that aren't reachable, and prints a summary at the end. Edit the `INSTANCES` array in the script to add/remove targets. Results are saved to `.test-results/`.
+The script loops through 5 Kestra instances (EE develop, OSS develop, EE latest, OSS latest, EE previous), skips any that aren't reachable, and prints a summary at the end. Edit the `run_instance` lines at the bottom of the script to add or remove targets. Results are saved to `.test-results/`.
+
+At least one Kestra 1.x and one Kestra 2.x instance should be included. The two majors speak different search and execution-action dialects, and a 1.x query parameter sent to a 2.x server is ignored rather than rejected, so an unfiltered result set can come back from a request that looks successful. That failure can only be caught against a running 2.x instance.
+
+The translation between the two dialects is covered by `test_compat.py`, which needs no server and runs in well under a second:
+
+```bash
+uv run pytest tests/test_compat.py
+```
 
 ## Test Structure
 
