@@ -65,7 +65,9 @@ async def test_restart_execution(kestra_client, cleanup):
     # Verify the restart response structure
     assert "id" in restart_json
     assert "state" in restart_json
-    assert restart_json["state"]["current"] == "RESTARTED"
+    # Kestra 1.x answers with RESTARTED; on 2.x the execution has usually
+    # already moved on by the time the response is serialized.
+    assert restart_json["state"]["current"] in ("RESTARTED", "CREATED", "RUNNING")
     assert restart_json["flowId"] == "failure"
     assert restart_json["namespace"] == "company.team"
 
@@ -93,7 +95,7 @@ async def test_restart_execution(kestra_client, cleanup):
     print(f"Restart first execution result: {json.dumps(restart_json, indent=2)}")
     assert "id" in restart_json
     assert "state" in restart_json
-    assert restart_json["state"]["current"] == "RESTARTED"
+    assert restart_json["state"]["current"] in ("RESTARTED", "CREATED", "RUNNING")
 
 
 @pytest.mark.asyncio

@@ -77,8 +77,17 @@ def register_files_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                             return {"error": f"The destination directory '{dest_dir}' does not exist in namespace '{namespace}'. Please create it first."}
                     # Generic 404
                     return {"error": "Move failed with 404 Not Found. Please check your paths and try again."}
-                else:
-                    raise
+                if e.response.status_code == 500:
+                    return {
+                        "error": (
+                            f"Kestra could not move '{path}' to '{to_path}' in namespace "
+                            f"'{namespace}'. On Kestra 2.x a file written to a path that was "
+                            "previously moved away is stored under a versioned name, which the "
+                            "move endpoint cannot resolve. Delete the file and upload it under "
+                            "the destination name instead."
+                        )
+                    }
+                raise
 
         elif action == "delete":
             resp = await client.delete(
@@ -160,7 +169,15 @@ def register_files_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                         if check_dest.status_code == 404:
                             return {"error": f"The destination parent directory '{dest_parent}' does not exist in namespace '{namespace}'. Please create it first."}
                     return {"error": "Move failed with 404 Not Found. Please check your paths and try again."}
-                else:
-                    raise
+                if e.response.status_code == 500:
+                    return {
+                        "error": (
+                            f"Kestra could not move the directory '{path}' to '{to_path}' in "
+                            f"namespace '{namespace}'. On Kestra 2.x a namespace file written "
+                            "to a path that was previously moved away is stored under a "
+                            "versioned name, which the move endpoint cannot resolve."
+                        )
+                    }
+                raise
         else:
             raise ValueError(f"Unknown action: {action}")

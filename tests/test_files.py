@@ -1,6 +1,7 @@
 import pytest
 from dotenv import load_dotenv
 import json
+import uuid
 from pathlib import Path
 
 load_dotenv(dotenv_path=Path(__file__).parent.parent.parent / ".env", override=True)
@@ -9,8 +10,13 @@ load_dotenv(dotenv_path=Path(__file__).parent.parent.parent / ".env", override=T
 @pytest.mark.asyncio
 async def test_namespace_file_actions(kestra_client):
     """Test namespace file actions."""
-    test_file_path = "etl.py"
-    original_path = Path(__file__).parent / "code" / "files" / test_file_path
+    # A fresh path per run. Kestra 2.x stores a file written to a path that was
+    # previously moved away under a versioned name, and a later move of that
+    # path then fails, so reusing one name makes the test fail on the second run.
+    suffix = uuid.uuid4().hex[:8]
+    test_file_path = f"etl_{suffix}.py"
+    moved_file_path = f"moved_etl_{suffix}.py"
+    original_path = Path(__file__).parent / "code" / "files" / "etl.py"
     with open(original_path, "rb") as f:
         original_content = f.read()
     assert isinstance(
@@ -34,19 +40,19 @@ async def test_namespace_file_actions(kestra_client):
         "namespace_file_action",
         {"namespace": "company.team", "path": test_file_path, "action": "get"},
     )
-    print(f"Get etl.py result: {content.content[0].text}")
+    print(f"Get {test_file_path} result: {content.content[0].text}")
     retrieved = json.loads(content.content[0].text)
     assert "import pandas as pd" in retrieved.get("content", retrieved)
 
     # Test file search
     search_results = await kestra_client.call_tool(
         "namespace_file_action",
-        {"namespace": "company.team", "action": "search", "q": "etl.py"},
+        {"namespace": "company.team", "action": "search", "q": test_file_path},
     )
-    print(f"Search results for etl.py: {search_results.content[0].text}")
+    print(f"Search results for {test_file_path}: {search_results.content[0].text}")
     search_data = json.loads(search_results.content[0].text)
     paths = search_data.get("results", search_data) if isinstance(search_data, dict) else search_data
-    assert any("etl.py" in str(path) for path in paths)
+    assert any(test_file_path in str(path) for path in paths)
 
     # Test file move
     move_result = await kestra_client.call_tool(
@@ -55,7 +61,7 @@ async def test_namespace_file_actions(kestra_client):
             "namespace": "company.team",
             "path": test_file_path,
             "action": "move",
-            "to_path": "moved_etl.py",
+            "to_path": moved_file_path,
         },
     )
     assert json.loads(move_result.content[0].text)["status"] == "moved"
@@ -63,16 +69,16 @@ async def test_namespace_file_actions(kestra_client):
     # Verify the file was moved
     moved_content = await kestra_client.call_tool(
         "namespace_file_action",
-        {"namespace": "company.team", "path": "moved_etl.py", "action": "get"},
+        {"namespace": "company.team", "path": moved_file_path, "action": "get"},
     )
-    print(f"Get moved_etl.py result: {moved_content.content[0].text}")
+    print(f"Get {moved_file_path} result: {moved_content.content[0].text}")
     retrieved = json.loads(moved_content.content[0].text)
     assert "import pandas as pd" in retrieved.get("content", retrieved)
 
     # Test file deletion
     delete_result = await kestra_client.call_tool(
         "namespace_file_action",
-        {"namespace": "company.team", "path": "moved_etl.py", "action": "delete"},
+        {"namespace": "company.team", "path": moved_file_path, "action": "delete"},
     )
     assert json.loads(delete_result.content[0].text)["status"] == "deleted"
 

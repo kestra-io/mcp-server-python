@@ -2,6 +2,7 @@ from fastmcp import FastMCP
 import httpx
 from typing import Annotated
 from pydantic import Field
+from kestra.compat import execution_action_path
 from kestra.utils import get_latest_execution
 
 
@@ -51,7 +52,9 @@ def register_restart_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         if revision:
             params["revision"] = revision
 
-        resp = await client.post(f"/executions/{execution_id}/restart", params=params)
+        resp = await client.post(
+            await execution_action_path(client, execution_id, "restart"), params=params
+        )
         resp.raise_for_status()
         return resp.json()
 
@@ -100,6 +103,8 @@ def register_restart_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             task_run_id = failed[0]["id"]
 
         body = {"taskRunId": task_run_id, "state": state}
-        resp = await client.post(f"/executions/{execution_id}/state", json=body)
+        resp = await client.post(
+            await execution_action_path(client, execution_id, "state"), json=body
+        )
         resp.raise_for_status()
         return resp.json()

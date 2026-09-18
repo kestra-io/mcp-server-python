@@ -5,6 +5,8 @@ import os
 from typing import Annotated, Optional
 from pydantic import Field
 
+from kestra.compat import backfill_create_path
+
 
 def ensure_int(val, name: str) -> int:
     if val is None:
@@ -84,6 +86,6 @@ def register_backfill_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         if tenant := os.getenv("KESTRA_TENANT_ID"):
             payload["tenantId"] = tenant
 
-        resp = await client.put("/triggers", json=payload)
+        resp = await client.put(await backfill_create_path(client), json=payload)
         resp.raise_for_status()
         return resp.json()

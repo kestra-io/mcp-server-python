@@ -2,6 +2,7 @@ from fastmcp import FastMCP
 import httpx
 from typing import Annotated
 from pydantic import Field
+from kestra.compat import namespaces_search_params
 from kestra.utils import _render_dependencies
 
 
@@ -44,9 +45,9 @@ def register_namespace_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         page = 1
 
         while True:
-            params = {"page": page, "size": page_size}
-            if query:
-                params["q"] = query
+            params = await namespaces_search_params(
+                client, query=query or None, page=page, size=page_size
+            )
 
             resp = await client.get("/namespaces/search", params=params)
             resp.raise_for_status()

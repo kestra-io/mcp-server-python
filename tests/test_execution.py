@@ -351,7 +351,10 @@ async def test_manage_executions(kestra_client, cleanup):
     assert response_json["executionId"] == execution_id
     assert response_json["status"] in ["kill_requested", "already_finished"]
 
-    # Test case 5: Execute get_data flow and change its status to WARNING
+    # Test case 5: Execute get_data flow and change its status to WARNING.
+    # The flow is created here rather than relied on from an earlier test: Kestra
+    # 1.x still executes a deleted flow, Kestra 2.x answers 404.
+    await create_flow("app_get_data_flow.yaml", kestra_client, cleanup)
     result = await kestra_client.call_tool(
         "execute_flow",
         {"namespace": "company.team", "flow_id": "get_data", "wait": True},

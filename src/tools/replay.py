@@ -2,6 +2,7 @@ from fastmcp import FastMCP
 import httpx
 from typing import Annotated
 from pydantic import Field
+from kestra.compat import normalize_bulk_response
 from kestra.utils import get_latest_execution
 
 
@@ -47,7 +48,7 @@ def register_replay_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 "/executions/replay/by-ids", params=params or None, json=ids
             )
             resp.raise_for_status()
-            result = resp.json()
+            result = normalize_bulk_response(resp.json())
             return {"message": f"Replayed execution {exec_id} for flow '{flow_id}' in namespace '{namespace}'.", "result": result}
         else:
             params: dict[str, bool] = {}
@@ -57,4 +58,4 @@ def register_replay_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 "/executions/replay/by-ids", params=params or None, json=ids
             )
             resp.raise_for_status()
-            return resp.json()
+            return normalize_bulk_response(resp.json())

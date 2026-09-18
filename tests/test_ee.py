@@ -860,9 +860,9 @@ async def test_configuration(kestra_client):
     assert "isAnonymousUsageEnabled" in response_json and isinstance(
         response_json["isAnonymousUsageEnabled"], bool
     )
-    assert "isTemplateEnabled" in response_json and isinstance(
-        response_json["isTemplateEnabled"], bool
-    )
+    # Templates were removed in Kestra 2.0, so the flag is 1.x only
+    if "isTemplateEnabled" in response_json:
+        assert isinstance(response_json["isTemplateEnabled"], bool)
     assert "environment" in response_json and isinstance(
         response_json["environment"], dict
     )

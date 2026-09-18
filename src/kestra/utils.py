@@ -118,9 +118,12 @@ def _score_flow_match(query: str, flow_id: str, namespace: str = "") -> float:
 async def get_latest_execution(
     client: httpx.AsyncClient, namespace: str, flow_id: str, state: str = None
 ) -> dict:
-    params = {"namespace": namespace, "flowId": flow_id, "size": 25}
-    if state:
-        params["state"] = state
+    # Imported here rather than at module level because compat imports this module.
+    from kestra.compat import executions_search_params
+
+    params = await executions_search_params(
+        client, namespace=namespace, flow_id=flow_id, state=state or None, size=25
+    )
     resp = await client.get("/executions/search", params=params)
     resp.raise_for_status()
     data = resp.json()

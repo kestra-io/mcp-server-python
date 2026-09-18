@@ -4,6 +4,11 @@ from typing import Annotated, Any, Literal, List
 from pydantic import Field
 import re
 from datetime import datetime, timedelta, timezone
+from kestra.compat import (
+    attach_execution_outputs,
+    execution_action_path,
+    executions_search_params,
+)
 from kestra.utils import _parse_iso
 from kestra.constants import (
     _VALID_STATES,
@@ -132,7 +137,7 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             f"/executions/{namespace}/{flow_id}", params=params, files=files or None
         )
         resp.raise_for_status()
-        return resp.json()
+        return await attach_execution_outputs(client, resp.json())
 
     @mcp.tool()
     async def manage_executions(
@@ -165,14 +170,19 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         - For 'get': the execution object as JSON
         - For 'change_status': the updated execution object as JSON"""
         if action == "pause":
-            resp = await client.post(f"/executions/{execution_id}/pause")
+            resp = await client.post(
+                await execution_action_path(client, execution_id, "pause")
+            )
             resp.raise_for_status()
             return {"status": "paused"}
         elif action == "kill":
             resp = await client.delete(
-                f"/executions/{execution_id}/kill", params={"isOnKillCascade": cascade}
+                await execution_action_path(client, execution_id, "kill"),
+                params={"isOnKillCascade": cascade},
             )
+            # 1.x answers a kill with 202, 2.x with 200.
             status_map = {
+                200: "kill_requested",
                 202: "kill_requested",
                 404: "not_found",
                 409: "already_finished",
@@ -190,7 +200,7 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         elif action == "get":
             resp = await client.get(f"/executions/{execution_id}")
             resp.raise_for_status()
-            return resp.json()
+            return await attach_execution_outputs(client, resp.json())
         elif action == "change_status":
             if not status:
                 raise ValueError("'status' is required for change_status action.")
@@ -200,7 +210,8 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                     f"Invalid status `{status}`. Must be one of: {allowed}"
                 )
             resp = await client.post(
-                f"/executions/{execution_id}/change-status", params={"status": status}
+                await execution_action_path(client, execution_id, "change-status"),
+                params={"status": status},
             )
             resp.raise_for_status()
             return resp.json()
@@ -244,7 +255,8 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         merged_labels = [{"key": k, "value": v} for k, v in label_map.items()]
 
         resp = await client.post(
-            f"/executions/{execution_id}/labels", json=merged_labels
+            await execution_action_path(client, execution_id, "labels"),
+            json=merged_labels,
         )
         resp.raise_for_status()
         return resp.json()
@@ -342,16 +354,15 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             )
 
         while True:
-            params: dict[str, Any] = {
-                "namespace": namespace,
-                "page": page,
-                "size": page_size,
-            }
-            if flow_id:
-                params["flowId"] = flow_id
-            params["startDate"] = effective_start_date
-            if end_date:
-                params["endDate"] = end_date
+            params = await executions_search_params(
+                client,
+                namespace=namespace,
+                flow_id=flow_id or None,
+                start_date=effective_start_date,
+                end_date=end_date or None,
+                page=page,
+                size=page_size,
+            )
 
             resp = await client.get("/executions/search", params=params)
             resp.raise_for_status()
