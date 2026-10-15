@@ -5,8 +5,7 @@ import uuid
 from typing import Annotated, List, Literal
 from pydantic import Field
 from kestra.compat import flows_search_params, supports_dashboard_crud
-from kestra.utils import _render_dependencies, _score_flow_match
-from kestra.constants import _RESERVED_FLOW_IDS
+from kestra.utils import _render_dependencies, _score_flow_match, _create_flow_from_yaml
 
 
 def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
@@ -200,34 +199,7 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         ],
     ) -> dict:
         """Create or update a Kestra flow from a raw YAML definition. Returns the created or updated flow's JSON metadata."""
-        doc = yaml.safe_load(yaml_definition)
-        ns = doc.get("namespace")
-        fid = doc.get("id")
-        if not ns or not fid:
-            raise ValueError("YAML must include 'namespace' and 'id' fields")
-
-        if fid in _RESERVED_FLOW_IDS:
-            allowed = ", ".join(sorted(_RESERVED_FLOW_IDS))
-            raise ValueError(
-                f"The flow ID `{fid}` is reserved and cannot be used. "
-                f"Please choose a different ID (not: {allowed})."
-            )
-
-        headers = {"Content-Type": "application/x-yaml"}
-        try:
-            resp = await client.post("/flows", content=yaml_definition, headers=headers)
-            resp.raise_for_status()
-            return resp.json()
-
-        except httpx.HTTPStatusError as e:
-            code = e.response.status_code
-            if code in (409, 422):
-                upd = await client.put(
-                    f"/flows/{ns}/{fid}", content=yaml_definition, headers=headers
-                )
-                upd.raise_for_status()
-                return upd.json()
-            raise
+        return await _create_flow_from_yaml(client, yaml_definition)
 
     @mcp.tool()
     async def manage_flow(
@@ -352,7 +324,7 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         generated_yaml = resp.text
 
         if auto_create:
-            return await create_flow_from_yaml(generated_yaml)
+            return await _create_flow_from_yaml(client, generated_yaml)
 
         return {"result": generated_yaml}
 

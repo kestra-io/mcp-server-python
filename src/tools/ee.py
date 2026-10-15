@@ -7,7 +7,8 @@ from typing import Annotated, List, Literal, Optional
 from pydantic import Field
 import os
 from kestra.compat import apps_search_params
-from kestra.utils import _root_api_url
+from kestra.utils import _root_api_url, _create_app, _create_test
+
 
 
 def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
@@ -192,26 +193,7 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         if action == "create":
             if not yaml_source:
                 raise ValueError("'yaml_source' is required for create action.")
-            try:
-                resp = await client.post("/tests", content=yaml_source, headers=headers)
-                resp.raise_for_status()
-                return resp.json()
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code in (409, 422):
-                    doc = yaml.safe_load(yaml_source)
-                    ns = doc.get("namespace")
-                    tid = doc.get("id")
-                    if not ns or not tid:
-                        raise ValueError(
-                            "YAML must include 'namespace' and 'id' fields for update."
-                        )
-                    put_url = f"/tests/{ns}/{tid}"
-                    put_resp = await client.put(
-                        put_url, content=yaml_source, headers=headers
-                    )
-                    put_resp.raise_for_status()
-                    return put_resp.json()
-                raise
+            return await _create_test(client, yaml_source)
         elif action == "delete":
             if not (namespace and id_):
                 raise ValueError(
@@ -267,53 +249,7 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         if action == "create":
             if not yaml_source:
                 raise ValueError("'yaml_source' is required for create action.")
-            try:
-                resp = await client.post("/apps", content=yaml_source, headers=headers)
-                resp.raise_for_status()
-                return resp.json()
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code in (409, 422):
-                    doc = yaml.safe_load(yaml_source)
-                    app_id = doc.get("id")
-                    app_namespace = doc.get("namespace")
-                    app_flow_id = doc.get("flowId")
-
-                    if not app_id or not app_namespace:
-                        raise ValueError(
-                            "YAML must include 'id' and 'namespace' fields for update."
-                        )
-
-                    # Search for existing app by id and namespace
-                    search_resp = await client.get(
-                        "/apps/search",
-                        params={
-                            "q": app_id,
-                            "namespace": app_namespace,
-                            "flowId": app_flow_id,
-                        },
-                    )
-                    search_resp.raise_for_status()
-                    search_results = search_resp.json()
-
-                    if not search_results["results"]:
-                        raise ValueError(
-                            f"Could not find existing app with id '{app_id}' in namespace '{app_namespace}'"
-                        )
-
-                    uid_val = search_results["results"][0]["uid"]
-                    if not uid_val:
-                        raise ValueError("YAML must include 'uid' field for update.")
-                    put_url = f"/apps/{uid_val}"
-                    put_resp = await client.put(
-                        put_url, content=yaml_source, headers=headers
-                    )
-                    # Handle 304 Not Modified response
-                    if put_resp.status_code == 304:
-                        # Return the existing app details from search results
-                        return search_results["results"][0]
-                    put_resp.raise_for_status()
-                    return put_resp.json()
-                raise
+            return await _create_app(client, yaml_source)
         elif action == "enable":
             if not uid:
                 raise ValueError("'uid' is required for enable action.")
@@ -732,7 +668,7 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         generated_yaml = resp.text
 
         if auto_create:
-            return await manage_apps(action="create", yaml_source=generated_yaml)
+            return await _create_app(client, generated_yaml)
 
         return {"result": generated_yaml}
 
@@ -777,6 +713,6 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         generated_yaml = resp.text
 
         if auto_create:
-            return await manage_tests(action="create", yaml_source=generated_yaml)
+            return await _create_test(client, generated_yaml)
 
         return {"result": generated_yaml}
