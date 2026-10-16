@@ -353,3 +353,95 @@ async def test_kv_listing_excludes_child_namespaces_on_v2():
 
     entries = await compat.list_kv_keys(KvClient(), "company.team")
     assert [e["key"] for e in entries] == ["a"]
+
+
+# ─── Trigger runtime state ───────────────────────────────────────────────────
+
+
+class TriggerSearchClient(FakeClient):
+    """Answers `GET /triggers/search` with one page of `items`."""
+
+    def __init__(self, items, **kwargs):
+        super().__init__(**kwargs)
+        self._items = items
+
+    async def get(self, url, params=None):
+        if str(url) == "/triggers/search":
+            self.requests.append((str(url), params or {}))
+            return httpx.Response(
+                200, json={"results": self._items}, request=httpx.Request("GET", url)
+            )
+        return await super().get(url, params)
+
+
+@pytest.mark.asyncio
+async def test_trigger_states_on_v2_reads_state_and_filters_namespace():
+    client = TriggerSearchClient(
+        [
+            {
+                "trigger": {"id": "nightly"},
+                "state": {
+                    "namespace": "company.team",
+                    "flowId": "report",
+                    "triggerId": "nightly",
+                    "disabled": True,
+                    "sourceDisabled": False,
+                    "locked": False,
+                    "nextEvaluationDate": "2026-10-17T02:00:00Z",
+                },
+            },
+            {
+                "trigger": {"id": "other"},
+                "state": {"namespace": "company.team.sub", "flowId": "f", "triggerId": "other"},
+            },
+        ],
+        version="2.0.6",
+    )
+    states = await compat.trigger_states(client, "company.team")
+    url, params = client.requests[-1]
+    assert url == "/triggers/search"
+    assert params["filters[namespace][EQUALS]"] == "company.team"
+    assert "namespace" not in params
+    assert states == {
+        ("report", "nightly"): {
+            "disabled": True,
+            "locked": False,
+            "next_evaluation": "2026-10-17T02:00:00Z",
+        }
+    }
+
+
+@pytest.mark.asyncio
+async def test_trigger_states_on_v1_reads_trigger_context():
+    client = TriggerSearchClient(
+        [
+            {
+                "abstractTrigger": {"id": "nightly"},
+                "triggerContext": {
+                    "namespace": "company.team",
+                    "flowId": "report",
+                    "triggerId": "nightly",
+                    "disabled": True,
+                    "nextExecutionDate": "2026-10-17T02:00:00Z",
+                },
+            },
+            {
+                "abstractTrigger": {"id": "other"},
+                "triggerContext": {"namespace": "company.teamwork", "flowId": "f", "triggerId": "other"},
+            },
+        ],
+        version="1.3.3",
+    )
+    states = await compat.trigger_states(client, "company.team")
+    url, params = client.requests[-1]
+    assert url == "/triggers/search"
+    assert params["namespace"] == "company.team"
+    assert not any(k.startswith("filters[") for k in params)
+    # 1.x `namespace` is a prefix: `company.teamwork` must be dropped.
+    assert states == {
+        ("report", "nightly"): {
+            "disabled": True,
+            "locked": None,
+            "next_evaluation": "2026-10-17T02:00:00Z",
+        }
+    }

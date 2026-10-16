@@ -467,6 +467,52 @@ async def list_kv_keys(client: httpx.AsyncClient, namespace: str) -> list:
     return entries
 
 
+async def trigger_states(client: httpx.AsyncClient, namespace: str) -> dict:
+    """Runtime state of every trigger in `namespace`, keyed by `(flowId, triggerId)`.
+
+    A trigger disabled from the UI or through `PUT /triggers/set-disabled` keeps
+    `disabled` unset in the flow source; only `GET /triggers/search` reports it.
+    2.x answers `{trigger, state}` items whose `state` also carries `locked` and
+    `nextEvaluationDate`. 1.x answers `{abstractTrigger, triggerContext}` items
+    with `disabled` and `nextExecutionDate`, and has no `locked` flag. The 1.x
+    `namespace` parameter is a prefix, so the results are narrowed back to the
+    namespace asked for, as in `list_kv_keys`.
+
+    Each value is `{"disabled": bool, "locked": bool | None, "next_evaluation":
+    str | None}`.
+    """
+    v2 = await is_v2(client)
+    states: dict = {}
+    page = 1
+    while True:
+        params: dict[str, Any] = {"page": page, "size": 100}
+        if v2:
+            _add(params, "namespace", "EQUALS", namespace)
+        else:
+            params["namespace"] = namespace
+        resp = await client.get("/triggers/search", params=params)
+        resp.raise_for_status()
+        data = resp.json()
+        batch = data.get("results", []) if isinstance(data, dict) else data
+        if not batch:
+            break
+        for item in batch:
+            state = (item.get("state") if v2 else item.get("triggerContext")) or {}
+            if state.get("namespace", namespace) != namespace:
+                continue
+            states[(state.get("flowId"), state.get("triggerId"))] = {
+                "disabled": bool(state.get("disabled")),
+                "locked": state.get("locked") if v2 else None,
+                "next_evaluation": state.get(
+                    "nextEvaluationDate" if v2 else "nextExecutionDate"
+                ),
+            }
+        if len(batch) < 100:
+            break
+        page += 1
+    return states
+
+
 async def attach_execution_outputs(
     client: httpx.AsyncClient, execution: Any
 ) -> Any:

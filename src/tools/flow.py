@@ -4,7 +4,7 @@ import yaml
 import uuid
 from typing import Annotated, List, Literal
 from pydantic import Field
-from kestra.compat import flows_search_params, supports_dashboard_crud
+from kestra.compat import flows_search_params, supports_dashboard_crud, trigger_states
 from kestra.utils import _render_dependencies, _score_flow_match
 from kestra.constants import _RESERVED_FLOW_IDS
 
@@ -128,15 +128,26 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         ] = False,
     ) -> dict:
         """List all flows that have one or more triggers.
+        A trigger is disabled when its definition sets `disabled: true`, or when
+        it was disabled at runtime (from the UI or the API) while its definition
+        still has it enabled. Runtime state also tells whether a trigger is
+        locked and when it is next evaluated.
         Returns a markdown‑style list of lines, e.g.:
 
         Flow `myflow` in namespace `dev` with triggers:
-        - `daily` (enabled) of type `io.kestra.plugin.core.trigger.Schedule`
+        - `daily` (enabled, next evaluation 2025-01-02T00:00:00Z) of type `io.kestra.plugin.core.trigger.Schedule`
             defined as:
             ```yaml
             id: daily
             type: io.kestra.plugin.core.trigger.Schedule
             cron: "0 0 * * *"
+            ```
+        - `nightly` (disabled at runtime) of type `io.kestra.plugin.core.trigger.Schedule`
+            defined as:
+            ```yaml
+            id: nightly
+            type: io.kestra.plugin.core.trigger.Schedule
+            cron: "0 2 * * *"
             ```
         - `api` (disabled) of type `io.kestra.plugin.core.trigger.Webhook`
             defined as:
@@ -152,29 +163,47 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             namespaces = ns_resp.json()
 
         results: List[str] = []
+        unread_states: List[str] = []
         for ns in namespaces:
             flows_resp = await client.get(f"/flows/{ns}")
             flows_resp.raise_for_status()
-            for flow in flows_resp.json():
-                triggers = flow.get("triggers", [])
-                if not triggers:
-                    continue
+            flows = [f for f in flows_resp.json() if f.get("triggers")]
+            if not flows:
+                continue
 
+            try:
+                states = await trigger_states(client, ns)
+            except httpx.HTTPError as exc:
+                unread_states.append(f"`{ns}` ({exc})")
+                states = {}
+
+            for flow in flows:
                 filtered = []
-                for t in triggers:
-                    is_disabled = t.get("disabled", False)
+                for t in flow["triggers"]:
+                    state = states.get((flow["id"], t.get("id")), {})
+                    source_disabled = bool(t.get("disabled", False))
+                    is_disabled = source_disabled or state.get("disabled", False)
                     if enabled_only and is_disabled:
                         continue
                     if disabled_only and not is_disabled:
                         continue
-                    filtered.append(t)
+                    filtered.append((t, state, source_disabled, is_disabled))
 
                 if not filtered:
                     continue
 
                 lines = [f"Flow `{flow['id']}` in namespace `{ns}` with triggers:"]
-                for t in filtered:
-                    status = "disabled" if t.get("disabled", False) else "enabled"
+                for t, state, source_disabled, is_disabled in filtered:
+                    if source_disabled:
+                        status = "disabled"
+                    elif is_disabled:
+                        status = "disabled at runtime"
+                    else:
+                        status = "enabled"
+                    if state.get("locked"):
+                        status += ", locked"
+                    if not is_disabled and state.get("next_evaluation"):
+                        status += f", next evaluation {state['next_evaluation']}"
                     t_id = t.get("id")
                     t_type = t.get("type")
 
@@ -188,6 +217,17 @@ def register_flow_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
 
                 results.append("\n".join(lines))
 
+        if unread_states:
+            return {
+                "results": results,
+                "warning": (
+                    "The runtime trigger state could not be read for "
+                    f"{', '.join(unread_states)}, so the status of those triggers "
+                    "comes from the flow definition only: a trigger disabled from "
+                    "the UI or the API is shown as enabled. Check that the API "
+                    "user can read triggers (GET /triggers/search)."
+                ),
+            }
         return {"results": results}
 
     @mcp.tool()

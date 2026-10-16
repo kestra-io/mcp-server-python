@@ -1,10 +1,37 @@
 import pytest
 from dotenv import load_dotenv
+import asyncio
+import httpx
 import json
+import os
+import sys
+from fastmcp import Client, FastMCP
 from pathlib import Path
 from test_utils import create_flow
 
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+from tools.flow import register_flow_tools  # noqa: E402
+
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env", override=True)
+
+
+def _tenant_http_client() -> httpx.AsyncClient:
+    """Raw API client, for setting up state that no MCP tool changes."""
+    base = os.getenv("KESTRA_BASE_URL", "http://localhost:8080/api/v1")
+    tenant = os.getenv("KESTRA_TENANT_ID")
+    headers: dict[str, str] = {}
+    auth = None
+    if (user := os.getenv("KESTRA_USERNAME")) and (pwd := os.getenv("KESTRA_PASSWORD")):
+        auth = httpx.BasicAuth(user, pwd)
+    elif token := os.getenv("KESTRA_API_TOKEN"):
+        headers["Authorization"] = f"Bearer {token}"
+    tenant_base = f"{base.rstrip('/')}/{tenant}" if tenant else base
+    return httpx.AsyncClient(base_url=tenant_base, auth=auth, headers=headers)
+
+
+async def _list_triggers_text(kestra_client, **args) -> str:
+    result = await kestra_client.call_tool("list_flows_with_triggers", args)
+    return "\n".join(json.loads(result.content[0].text)["results"])
 
 
 @pytest.mark.asyncio
@@ -123,3 +150,90 @@ async def test_list_flows_with_triggers(kestra_client, cleanup):
     # Items are markdown strings describing flows with triggers
     combined = "\n".join(str(i) for i in items)
     assert "scheduled_flow" in combined
+
+
+@pytest.mark.asyncio
+async def test_list_flows_with_triggers_reports_runtime_state(kestra_client, cleanup):
+    """A trigger disabled at runtime (UI toggle / set-disabled API) keeps
+    `disabled` unset in the flow source, but must be reported as disabled."""
+    await create_flow("runtime_disabled_trigger.yaml", kestra_client, cleanup)
+    key = {"namespace": "company.team", "flowId": "runtime_disabled_trigger", "triggerId": "nightly"}
+
+    async with _tenant_http_client() as http:
+        # The scheduler creates the trigger state shortly after the flow is saved.
+        text = ""
+        for _ in range(30):
+            text = await _list_triggers_text(kestra_client, namespace="company.team")
+            if "`nightly` (enabled, next evaluation" in text:
+                break
+            await asyncio.sleep(1)
+        assert "`nightly` (enabled, next evaluation" in text, text
+
+        resp = await http.put("/triggers/set-disabled", json={**key, "disabled": True})
+        resp.raise_for_status()
+
+        text = await _list_triggers_text(kestra_client, namespace="company.team")
+        assert "`nightly` (disabled at runtime)" in text, text
+
+        disabled = await _list_triggers_text(
+            kestra_client, namespace="company.team", disabled_only=True
+        )
+        assert "runtime_disabled_trigger" in disabled
+
+        enabled = await _list_triggers_text(
+            kestra_client, namespace="company.team", enabled_only=True
+        )
+        assert "runtime_disabled_trigger" not in enabled
+
+
+@pytest.mark.asyncio
+async def test_list_flows_with_triggers_source_disabled(kestra_client, cleanup):
+    """A trigger disabled in its definition is still reported as plain `disabled`."""
+    await create_flow("scheduled_flow_disabled_trigger.yaml", kestra_client, cleanup)
+    text = await _list_triggers_text(
+        kestra_client, namespace="company.team", disabled_only=True
+    )
+    assert "`schedule` (disabled)" in text, text
+
+
+@pytest.mark.asyncio
+async def test_list_flows_with_triggers_warns_when_trigger_state_is_unreadable():
+    """If `GET /triggers/search` fails, the listing still answers from the flow
+    source, and says so in `warning` rather than silently showing `enabled`."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/configs"):
+            return httpx.Response(200, json={"version": "2.0.6", "edition": "OSS"})
+        if request.url.path.endswith("/flows/company.team"):
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "id": "report",
+                        "namespace": "company.team",
+                        "triggers": [
+                            {
+                                "id": "nightly",
+                                "type": "io.kestra.plugin.core.trigger.Schedule",
+                                "cron": "0 2 * * *",
+                            }
+                        ],
+                    }
+                ],
+            )
+        if request.url.path.endswith("/triggers/search"):
+            return httpx.Response(403, json={"message": "Forbidden"})
+        return httpx.Response(404)
+
+    http = httpx.AsyncClient(
+        base_url="http://kestra/api/v1/main", transport=httpx.MockTransport(handler)
+    )
+    mcp = FastMCP("test")
+    register_flow_tools(mcp, http)
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "list_flows_with_triggers", {"namespace": "company.team"}
+        )
+    response = json.loads(result.content[0].text)
+    assert "`nightly` (enabled)" in response["results"][0]
+    assert "`company.team`" in response["warning"]
+    assert "403" in response["warning"]
