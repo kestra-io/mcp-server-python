@@ -1,0 +1,12 @@
+id: runtime_disabled_trigger
+namespace: company.team
+
+tasks:
+  - id: noop
+    type: io.kestra.plugin.core.log.Log
+    message: "nightly report"
+
+triggers:
+  - id: nightly
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "0 2 * * *"

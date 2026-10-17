@@ -353,3 +353,139 @@ async def test_kv_listing_excludes_child_namespaces_on_v2():
 
     entries = await compat.list_kv_keys(KvClient(), "company.team")
     assert [e["key"] for e in entries] == ["a"]
+
+
+# ─── Trigger runtime state ───────────────────────────────────────────────────
+
+
+class TriggerSearchClient(FakeClient):
+    """Answers `GET /triggers/search` with `items` as a single page, or with
+    `pages` in order, then empty pages. `total` is sent when given."""
+
+    def __init__(self, items=None, pages=None, total=None, **kwargs):
+        super().__init__(**kwargs)
+        self._pages = pages if pages is not None else [items]
+        self._total = total if total is not None else sum(len(p) for p in self._pages)
+
+    async def get(self, url, params=None):
+        if str(url) == "/triggers/search":
+            self.requests.append((str(url), params or {}))
+            page = (params or {}).get("page", 1)
+            items = self._pages[page - 1] if page <= len(self._pages) else []
+            return httpx.Response(
+                200,
+                json={"results": items, "total": self._total},
+                request=httpx.Request("GET", url),
+            )
+        return await super().get(url, params)
+
+
+@pytest.mark.asyncio
+async def test_trigger_states_on_v2_reads_state_and_filters_namespace():
+    client = TriggerSearchClient(
+        [
+            {
+                "trigger": {"id": "nightly"},
+                "state": {
+                    "namespace": "company.team",
+                    "flowId": "report",
+                    "triggerId": "nightly",
+                    "disabled": True,
+                    "sourceDisabled": False,
+                    "locked": False,
+                    "nextEvaluationDate": "2026-10-17T02:00:00Z",
+                },
+            },
+            {
+                "trigger": {"id": "other"},
+                "state": {"namespace": "company.team.sub", "flowId": "f", "triggerId": "other"},
+            },
+        ],
+        version="2.0.6",
+    )
+    states = await compat.trigger_states(client, "company.team")
+    url, params = client.requests[-1]
+    assert url == "/triggers/search"
+    assert params["filters[namespace][EQUALS]"] == "company.team"
+    assert "namespace" not in params
+    assert states == {
+        ("report", "nightly"): {
+            "disabled": True,
+            "locked": False,
+            "next_evaluation": "2026-10-17T02:00:00Z",
+        }
+    }
+
+
+@pytest.mark.asyncio
+async def test_trigger_states_on_v1_reads_trigger_context():
+    client = TriggerSearchClient(
+        [
+            {
+                "abstractTrigger": {"id": "nightly"},
+                "triggerContext": {
+                    "namespace": "company.team",
+                    "flowId": "report",
+                    "triggerId": "nightly",
+                    "disabled": True,
+                    "nextExecutionDate": "2026-10-17T02:00:00Z",
+                },
+            },
+            {
+                "abstractTrigger": {"id": "other"},
+                "triggerContext": {"namespace": "company.teamwork", "flowId": "f", "triggerId": "other"},
+            },
+        ],
+        version="1.3.3",
+    )
+    states = await compat.trigger_states(client, "company.team")
+    url, params = client.requests[-1]
+    assert url == "/triggers/search"
+    assert params["namespace"] == "company.team"
+    assert not any(k.startswith("filters[") for k in params)
+    # 1.x `namespace` is a prefix: `company.teamwork` must be dropped.
+    assert states == {
+        ("report", "nightly"): {
+            "disabled": True,
+            "locked": None,
+            "next_evaluation": "2026-10-17T02:00:00Z",
+        }
+    }
+
+
+def _state(flow_id, trigger_id, namespace="company.team"):
+    return {
+        "trigger": {"id": trigger_id},
+        "state": {"namespace": namespace, "flowId": flow_id, "triggerId": trigger_id, "disabled": True},
+    }
+
+
+@pytest.mark.asyncio
+async def test_trigger_states_pages_by_total_not_by_page_length():
+    # The server drops the rows of deleted flows after applying the page size,
+    # so `total` (250) counts rows that never come back: page 1 is short and
+    # page 2 is empty, yet page 3 still holds a trigger.
+    client = TriggerSearchClient(
+        pages=[[_state("first", "nightly")], [], [_state("third", "hourly")]],
+        total=250,
+        version="2.0.6",
+    )
+    states = await compat.trigger_states(client, "company.team")
+    assert [params["page"] for url, params in client.requests if url == "/triggers/search"] == [1, 2, 3]
+    assert set(states) == {("first", "nightly"), ("third", "hourly")}
+
+
+@pytest.mark.asyncio
+async def test_trigger_states_stops_on_an_empty_page_without_total():
+    class NoTotalClient(FakeClient):
+        async def get(self, url, params=None):
+            if str(url) == "/triggers/search":
+                self.requests.append((str(url), params or {}))
+                items = [_state("only", "nightly")] if params["page"] == 1 else []
+                return httpx.Response(200, json=items, request=httpx.Request("GET", url))
+            return await super().get(url, params)
+
+    client = NoTotalClient(version="2.0.6")
+    states = await compat.trigger_states(client, "company.team")
+    assert [params["page"] for url, params in client.requests if url == "/triggers/search"] == [1, 2]
+    assert set(states) == {("only", "nightly")}

@@ -13,6 +13,7 @@ Find flows that have triggers and return detailed information about the trigger 
 
 List flows with active triggers
 List flows with disabled triggers
+Why didn't the nightly schedule in company.team run? Is its trigger disabled from the UI or locked, and when is it next evaluated?
 
 Create a flow with YAML:
 ```yaml
