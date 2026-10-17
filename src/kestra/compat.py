@@ -470,7 +470,7 @@ async def list_kv_keys(client: httpx.AsyncClient, namespace: str) -> list:
 async def trigger_states(client: httpx.AsyncClient, namespace: str) -> dict:
     """Runtime state of every trigger in `namespace`, keyed by `(flowId, triggerId)`.
 
-    A trigger disabled from the UI or through `PUT /triggers/set-disabled` keeps
+    A trigger disabled from the UI or through the set-disabled API keeps
     `disabled` unset in the flow source; only `GET /triggers/search` reports it.
     2.x answers `{trigger, state}` items whose `state` also carries `locked` and
     `nextEvaluationDate`. 1.x answers `{abstractTrigger, triggerContext}` items

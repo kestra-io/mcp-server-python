@@ -45,11 +45,15 @@ async def _set_trigger_disabled(http: httpx.AsyncClient, trigger: dict, disabled
     )
     search.raise_for_status()
     context = next(
-        item["triggerContext"]
-        for item in search.json()["results"]
-        if item["triggerContext"]["flowId"] == trigger["flowId"]
-        and item["triggerContext"]["triggerId"] == trigger["triggerId"]
+        (
+            item["triggerContext"]
+            for item in search.json()["results"]
+            if item["triggerContext"]["flowId"] == trigger["flowId"]
+            and item["triggerContext"]["triggerId"] == trigger["triggerId"]
+        ),
+        None,
     )
+    assert context is not None, f"trigger {trigger} not found in /triggers/search"
     resp = await http.post(
         "/triggers/set-disabled/by-triggers",
         json={"triggers": [context], "disabled": disabled},
@@ -251,15 +255,15 @@ async def test_list_flows_with_triggers_warns_when_trigger_state_is_unreadable()
             return httpx.Response(403, json={"message": "Forbidden"})
         return httpx.Response(404)
 
-    http = httpx.AsyncClient(
+    async with httpx.AsyncClient(
         base_url="http://kestra/api/v1/main", transport=httpx.MockTransport(handler)
-    )
-    mcp = FastMCP("test")
-    register_flow_tools(mcp, http)
-    async with Client(mcp) as client:
-        result = await client.call_tool(
-            "list_flows_with_triggers", {"namespace": "company.team"}
-        )
+    ) as http:
+        mcp = FastMCP("test")
+        register_flow_tools(mcp, http)
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "list_flows_with_triggers", {"namespace": "company.team"}
+            )
     response = json.loads(result.content[0].text)
     assert "`nightly` (enabled)" in response["results"][0]
     assert "`company.team`" in response["warning"]
