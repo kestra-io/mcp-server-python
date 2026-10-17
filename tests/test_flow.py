@@ -10,6 +10,7 @@ from pathlib import Path
 from test_utils import create_flow
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+from kestra.compat import is_v2  # noqa: E402
 from tools.flow import register_flow_tools  # noqa: E402
 
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env", override=True)
@@ -27,6 +28,33 @@ def _tenant_http_client() -> httpx.AsyncClient:
         headers["Authorization"] = f"Bearer {token}"
     tenant_base = f"{base.rstrip('/')}/{tenant}" if tenant else base
     return httpx.AsyncClient(base_url=tenant_base, auth=auth, headers=headers)
+
+
+async def _set_trigger_disabled(http: httpx.AsyncClient, trigger: dict, disabled: bool) -> None:
+    """Disable or enable a trigger at runtime, as the UI toggle does. Only 2.x has
+    `PUT /triggers/set-disabled`; 1.x has `POST /triggers/set-disabled/by-triggers`."""
+    if await is_v2(http):
+        resp = await http.put("/triggers/set-disabled", json={**trigger, "disabled": disabled})
+        resp.raise_for_status()
+        return
+    # 1.x matches the trigger on its uid, which includes the tenant: a body
+    # without `tenantId` is accepted ({"count": 1}) but changes nothing. Send
+    # the trigger context as /triggers/search returns it, like the UI does.
+    search = await http.get(
+        "/triggers/search", params={"namespace": trigger["namespace"], "size": 100}
+    )
+    search.raise_for_status()
+    context = next(
+        item["triggerContext"]
+        for item in search.json()["results"]
+        if item["triggerContext"]["flowId"] == trigger["flowId"]
+        and item["triggerContext"]["triggerId"] == trigger["triggerId"]
+    )
+    resp = await http.post(
+        "/triggers/set-disabled/by-triggers",
+        json={"triggers": [context], "disabled": disabled},
+    )
+    resp.raise_for_status()
 
 
 async def _list_triggers_text(kestra_client, **args) -> str:
@@ -169,8 +197,7 @@ async def test_list_flows_with_triggers_reports_runtime_state(kestra_client, cle
             await asyncio.sleep(1)
         assert "`nightly` (enabled, next evaluation" in text, text
 
-        resp = await http.put("/triggers/set-disabled", json={**key, "disabled": True})
-        resp.raise_for_status()
+        await _set_trigger_disabled(http, key, True)
 
         text = await _list_triggers_text(kestra_client, namespace="company.team")
         assert "`nightly` (disabled at runtime)" in text, text

@@ -483,9 +483,10 @@ async def trigger_states(client: httpx.AsyncClient, namespace: str) -> dict:
     """
     v2 = await is_v2(client)
     states: dict = {}
+    size = 100
     page = 1
     while True:
-        params: dict[str, Any] = {"page": page, "size": 100}
+        params: dict[str, Any] = {"page": page, "size": size}
         if v2:
             _add(params, "namespace", "EQUALS", namespace)
         else:
@@ -493,9 +494,11 @@ async def trigger_states(client: httpx.AsyncClient, namespace: str) -> dict:
         resp = await client.get("/triggers/search", params=params)
         resp.raise_for_status()
         data = resp.json()
-        batch = data.get("results", []) if isinstance(data, dict) else data
-        if not batch:
-            break
+        if isinstance(data, dict):
+            batch = data.get("results") or []
+            total = data.get("total")
+        else:
+            batch, total = data or [], None
         for item in batch:
             state = (item.get("state") if v2 else item.get("triggerContext")) or {}
             if state.get("namespace", namespace) != namespace:
@@ -507,7 +510,13 @@ async def trigger_states(client: httpx.AsyncClient, namespace: str) -> dict:
                     "nextEvaluationDate" if v2 else "nextExecutionDate"
                 ),
             }
-        if len(batch) < 100:
+        # `total` counts trigger rows before the server drops the ones whose flow
+        # was deleted, so a page can come back short, or even empty, while more
+        # pages exist. Page by `total`, and by an empty page only without it.
+        if total is None:
+            if not batch:
+                break
+        elif page * size >= total:
             break
         page += 1
     return states
