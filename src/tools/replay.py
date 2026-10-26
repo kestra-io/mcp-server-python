@@ -10,19 +10,19 @@ def register_replay_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
     @mcp.tool()
     async def replay_execution(
         ids: Annotated[
-            list,
+            list | None,
             Field(
                 description="List of execution IDs to replay. If not provided, namespace and flow_id are required to fetch the latest execution."
             ),
         ] = None,
         namespace: Annotated[
-            str,
+            str | None,
             Field(
                 description="Namespace of the flow (required if ids is not provided)"
             ),
         ] = None,
         flow_id: Annotated[
-            str, Field(description="Flow ID (required if ids is not provided)")
+            str | None, Field(description="Flow ID (required if ids is not provided)")
         ] = None,
         latest_revision: Annotated[
             bool, Field(description="Use the latest flow revision (optional)")
