@@ -607,3 +607,33 @@ async def test_task_outputs_are_left_alone_without_the_listing_endpoint():
 
     execution = execution_with(("r1", "greet"))
     assert await compat.attach_task_outputs(NoEndpoint(), execution) == execution
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [401, 403, 500, 503])
+async def test_failed_task_output_listing_is_named_in_a_warning(status):
+    class FailingListing(FakeClient):
+        async def get(self, url, params=None):
+            if "/outputs/tasks/" in str(url):
+                return httpx.Response(status, request=httpx.Request("GET", url))
+            return await super().get(url, params)
+
+    execution = execution_with(("r1", "greet"))
+    result = await compat.attach_task_outputs(FailingListing(), execution)
+
+    assert result["taskRunList"] == execution["taskRunList"]
+    assert "GET /outputs/tasks/abc" in result["warning"]
+    assert f"HTTP {status}" in result["warning"]
+
+
+@pytest.mark.asyncio
+async def test_task_output_listing_timeout_is_named_in_a_warning():
+    class TimingOut(FakeClient):
+        async def get(self, url, params=None):
+            if "/outputs/tasks/" in str(url):
+                raise httpx.ReadTimeout("timed out", request=httpx.Request("GET", url))
+            return await super().get(url, params)
+
+    result = await compat.attach_task_outputs(TimingOut(), execution_with(("r1", "greet")))
+
+    assert "ReadTimeout" in result["warning"]

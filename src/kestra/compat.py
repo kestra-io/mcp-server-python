@@ -569,8 +569,9 @@ async def attach_task_outputs(client: httpx.AsyncClient, execution: Any) -> Any:
     outputs, and `GET /outputs/tasks/{id}/{taskRunId}` serves each of them.
     Without this, every task of an execution read on 2.x looks like it produced
     nothing. Servers that do not expose the endpoint are left untouched, as in
-    `attach_execution_outputs`, but a task run whose outputs could not be read
-    is named in a `warning` key rather than shown as having none.
+    `attach_execution_outputs` (a 404 on the listing is silent), but a listing
+    that fails otherwise, and a task run whose outputs could not be read, are
+    reported in a `warning` key rather than shown as having none.
     """
     if not isinstance(execution, dict):
         return execution
@@ -586,15 +587,35 @@ async def attach_task_outputs(client: httpx.AsyncClient, execution: Any) -> Any:
     if not task_ids:
         return execution
 
+    listing_url = f"/outputs/tasks/{execution_id}"
+
+    def listing_failed(reason: str) -> dict:
+        return {
+            **execution,
+            "warning": (
+                f"Task outputs could not be listed from GET {listing_url} ({reason}), "
+                "so every task run is shown without outputs."
+            ),
+        }
+
     try:
-        resp = await client.get(f"/outputs/tasks/{execution_id}")
-        if resp.status_code != 200 or not resp.content:
-            return execution
+        resp = await client.get(listing_url)
+    except httpx.HTTPError as e:
+        logger.debug("Task outputs of %s could not be listed: %s", execution_id, e)
+        return listing_failed(type(e).__name__)
+    if resp.status_code == 404:
+        # The execution is gone or the server does not expose the endpoint.
+        return execution
+    if resp.status_code != 200:
+        return listing_failed(f"HTTP {resp.status_code}")
+    if not resp.content:
+        return execution
+    try:
         listed = resp.json()
-    except (httpx.HTTPError, ValueError):
-        return execution
+    except ValueError:
+        return listing_failed("the response is not JSON")
     if not isinstance(listed, list):
-        return execution
+        return listing_failed("the response is not a list")
     wanted = list(
         dict.fromkeys(
             item.get("taskRunId")
