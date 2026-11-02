@@ -489,3 +489,151 @@ async def test_trigger_states_stops_on_an_empty_page_without_total():
     states = await compat.trigger_states(client, "company.team")
     assert [params["page"] for url, params in client.requests if url == "/triggers/search"] == [1, 2]
     assert set(states) == {("only", "nightly")}
+
+
+class WithTaskOutputs(FakeClient):
+    """Serves `GET /outputs/tasks/...` as Kestra 2.0 does for execution `abc`."""
+
+    def __init__(self, listed, outputs, **kwargs):
+        super().__init__(**kwargs)
+        self._listed = listed
+        self._outputs = outputs
+
+    async def get(self, url, params=None):
+        url = str(url)
+        if "/outputs/tasks/abc" in url:
+            self.requests.append((url, params or {}))
+            if url.endswith("/outputs/tasks/abc"):
+                return httpx.Response(200, json=self._listed, request=httpx.Request("GET", url))
+            task_run_id = url.rsplit("/", 1)[1]
+            if task_run_id in self._outputs:
+                return httpx.Response(
+                    200, json=self._outputs[task_run_id], request=httpx.Request("GET", url)
+                )
+            return httpx.Response(500, request=httpx.Request("GET", url))
+        return await super().get(url, params)
+
+    def task_output_requests(self):
+        return [url for url, _ in self.requests if "/outputs/tasks/" in url]
+
+
+def execution_with(*task_runs):
+    return {
+        "id": "abc",
+        "taskRunList": [{"id": run_id, "taskId": task_id} for run_id, task_id in task_runs],
+    }
+
+
+@pytest.mark.asyncio
+async def test_task_outputs_are_left_alone_on_v1():
+    execution = execution_with(("r1", "greet"))
+    client = WithTaskOutputs([{"taskRunId": "r1"}], {"r1": {"value": "hi"}}, version="1.3.3")
+    assert await compat.attach_task_outputs(client, execution) == execution
+    assert client.task_output_requests() == []
+
+
+@pytest.mark.asyncio
+async def test_task_outputs_are_fetched_on_v2():
+    client = WithTaskOutputs(
+        [{"taskId": "greet", "taskRunId": "r1", "inline": True},
+         {"taskId": "write", "taskRunId": "r3", "inline": True}],
+        {"r1": {"value": "hi"}, "r3": {"uri": "kestra:///a.csv"}},
+    )
+    execution = execution_with(("r1", "greet"), ("r2", "log"), ("r3", "write"))
+
+    result = await compat.attach_task_outputs(client, execution)
+
+    assert result["taskRunList"] == [
+        {"id": "r1", "taskId": "greet", "outputs": {"value": "hi"}},
+        {"id": "r2", "taskId": "log"},
+        {"id": "r3", "taskId": "write", "outputs": {"uri": "kestra:///a.csv"}},
+    ]
+    assert "warning" not in result
+    # Only the task runs the listing names are requested.
+    assert client.task_output_requests() == [
+        "/outputs/tasks/abc", "/outputs/tasks/abc/r1", "/outputs/tasks/abc/r3",
+    ]
+    assert "outputs" not in execution["taskRunList"][0]
+
+
+@pytest.mark.asyncio
+async def test_task_outputs_already_on_the_execution_are_not_requested_again():
+    client = WithTaskOutputs([{"taskRunId": "r1"}], {"r1": {"value": "other"}})
+    execution = {"id": "abc", "taskRunList": [{"id": "r1", "outputs": {"value": "hi"}}]}
+    assert await compat.attach_task_outputs(client, execution) == execution
+    assert client.task_output_requests() == []
+
+
+@pytest.mark.asyncio
+async def test_unreadable_task_outputs_are_named_in_a_warning():
+    client = WithTaskOutputs(
+        [{"taskRunId": "r1"}, {"taskRunId": "r2"}], {"r1": {"value": "hi"}}
+    )
+
+    result = await compat.attach_task_outputs(client, execution_with(("r1", "greet"), ("r2", "write")))
+
+    assert result["taskRunList"][0]["outputs"] == {"value": "hi"}
+    assert "outputs" not in result["taskRunList"][1]
+    assert "write (r2)" in result["warning"]
+    assert "greet" not in result["warning"]
+
+
+@pytest.mark.asyncio
+async def test_task_output_requests_are_capped(monkeypatch):
+    monkeypatch.setattr(compat, "TASK_OUTPUTS_LIMIT", 2)
+    runs = [(f"r{i}", f"t{i}") for i in range(3)]
+    client = WithTaskOutputs(
+        [{"taskRunId": run_id} for run_id, _ in runs],
+        {run_id: {"value": run_id} for run_id, _ in runs},
+    )
+
+    result = await compat.attach_task_outputs(client, execution_with(*runs))
+
+    assert len(client.task_output_requests()) == 1 + 2
+    assert [run.get("outputs") for run in result["taskRunList"]] == [
+        {"value": "r0"}, {"value": "r1"}, None,
+    ]
+    assert "first 2 task runs" in result["warning"]
+    assert "1 more" in result["warning"]
+
+
+@pytest.mark.asyncio
+async def test_task_outputs_are_left_alone_without_the_listing_endpoint():
+    class NoEndpoint(FakeClient):
+        async def get(self, url, params=None):
+            if "/outputs/tasks/" in str(url):
+                return httpx.Response(404, request=httpx.Request("GET", url))
+            return await super().get(url, params)
+
+    execution = execution_with(("r1", "greet"))
+    assert await compat.attach_task_outputs(NoEndpoint(), execution) == execution
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [401, 403, 500, 503])
+async def test_failed_task_output_listing_is_named_in_a_warning(status):
+    class FailingListing(FakeClient):
+        async def get(self, url, params=None):
+            if "/outputs/tasks/" in str(url):
+                return httpx.Response(status, request=httpx.Request("GET", url))
+            return await super().get(url, params)
+
+    execution = execution_with(("r1", "greet"))
+    result = await compat.attach_task_outputs(FailingListing(), execution)
+
+    assert result["taskRunList"] == execution["taskRunList"]
+    assert "GET /outputs/tasks/abc" in result["warning"]
+    assert f"HTTP {status}" in result["warning"]
+
+
+@pytest.mark.asyncio
+async def test_task_output_listing_timeout_is_named_in_a_warning():
+    class TimingOut(FakeClient):
+        async def get(self, url, params=None):
+            if "/outputs/tasks/" in str(url):
+                raise httpx.ReadTimeout("timed out", request=httpx.Request("GET", url))
+            return await super().get(url, params)
+
+    result = await compat.attach_task_outputs(TimingOut(), execution_with(("r1", "greet")))
+
+    assert "ReadTimeout" in result["warning"]

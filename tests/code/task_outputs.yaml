@@ -1,0 +1,12 @@
+id: task_outputs
+namespace: company.team
+
+tasks:
+  - id: greet
+    type: io.kestra.plugin.core.debug.Return
+    format: "hello {{ execution.id }}"
+
+  - id: write
+    type: io.kestra.plugin.core.storage.Write
+    content: "a,b\n1,2\n"
+    extension: .csv

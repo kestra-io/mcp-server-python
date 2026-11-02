@@ -12,6 +12,7 @@ built here from the version the server reports, rather than being sent in one
 dialect and hoped for.
 """
 
+import asyncio
 import logging
 import os
 import re
@@ -550,6 +551,126 @@ async def attach_execution_outputs(
     if outputs:
         return {**execution, "outputs": outputs}
     return execution
+
+
+# `attach_task_outputs` makes one request per task run that has outputs. These
+# bound the requests and their parallelism for a large execution, such as a
+# ForEach over thousands of items; task runs past the limit are named in a
+# warning instead of being read.
+TASK_OUTPUTS_LIMIT = 100
+_TASK_OUTPUTS_CONCURRENCY = 8
+
+
+async def attach_task_outputs(client: httpx.AsyncClient, execution: Any) -> Any:
+    """Put the task outputs back on the task runs of an execution object.
+
+    Kestra 1.x carries them in `taskRunList[].outputs`. Kestra 2.0 removed them
+    from the execution: `GET /outputs/tasks/{id}` lists the task runs that have
+    outputs, and `GET /outputs/tasks/{id}/{taskRunId}` serves each of them.
+    Without this, every task of an execution read on 2.x looks like it produced
+    nothing. Servers that do not expose the endpoint are left untouched, as in
+    `attach_execution_outputs` (a 404 on the listing is silent), but a listing
+    that fails otherwise, and a task run whose outputs could not be read, are
+    reported in a `warning` key rather than shown as having none.
+    """
+    if not isinstance(execution, dict):
+        return execution
+    execution_id = execution.get("id")
+    task_runs = execution.get("taskRunList")
+    if not execution_id or not task_runs or not await is_v2(client):
+        return execution
+    task_ids = {
+        task_run["id"]: task_run.get("taskId")
+        for task_run in task_runs
+        if isinstance(task_run, dict) and task_run.get("id") and not task_run.get("outputs")
+    }
+    if not task_ids:
+        return execution
+
+    listing_url = f"/outputs/tasks/{execution_id}"
+
+    def listing_failed(reason: str) -> dict:
+        return {
+            **execution,
+            "warning": (
+                f"Task outputs could not be listed from GET {listing_url} ({reason}), "
+                "so every task run is shown without outputs."
+            ),
+        }
+
+    try:
+        resp = await client.get(listing_url)
+    except httpx.HTTPError as e:
+        logger.debug("Task outputs of %s could not be listed: %s", execution_id, e)
+        return listing_failed(type(e).__name__)
+    if resp.status_code == 404:
+        # The execution is gone or the server does not expose the endpoint.
+        return execution
+    if resp.status_code != 200:
+        return listing_failed(f"HTTP {resp.status_code}")
+    if not resp.content:
+        return execution
+    try:
+        listed = resp.json()
+    except ValueError:
+        return listing_failed("the response is not JSON")
+    if not isinstance(listed, list):
+        return listing_failed("the response is not a list")
+    wanted = list(
+        dict.fromkeys(
+            item.get("taskRunId")
+            for item in listed
+            if isinstance(item, dict) and item.get("taskRunId") in task_ids
+        )
+    )
+    if not wanted:
+        return execution
+
+    semaphore = asyncio.Semaphore(_TASK_OUTPUTS_CONCURRENCY)
+
+    async def read(task_run_id: str) -> tuple[str, Any]:
+        async with semaphore:
+            try:
+                resp = await client.get(f"/outputs/tasks/{execution_id}/{task_run_id}")
+                if resp.status_code == 200 and resp.content:
+                    return task_run_id, resp.json()
+                logger.debug("Task outputs of %s answered %s", task_run_id, resp.status_code)
+            except (httpx.HTTPError, ValueError) as e:
+                logger.debug("Task outputs of %s could not be read: %s", task_run_id, e)
+            return task_run_id, None
+
+    read_outputs = await asyncio.gather(*(read(t) for t in wanted[:TASK_OUTPUTS_LIMIT]))
+    outputs = {task_run_id: out for task_run_id, out in read_outputs if out is not None}
+    result = {
+        **execution,
+        "taskRunList": [
+            {**task_run, "outputs": outputs[task_run["id"]]}
+            if isinstance(task_run, dict) and task_run.get("id") in outputs
+            else task_run
+            for task_run in task_runs
+        ],
+    }
+
+    warnings = []
+    unread = [
+        f"{task_ids[task_run_id]} ({task_run_id})"
+        for task_run_id, out in read_outputs
+        if out is None
+    ]
+    if unread:
+        warnings.append(
+            f"The outputs of {', '.join(unread)} could not be read from "
+            f"GET /outputs/tasks/{execution_id}/<taskRunId>, so they are shown as empty."
+        )
+    if len(wanted) > TASK_OUTPUTS_LIMIT:
+        warnings.append(
+            f"Only the outputs of the first {TASK_OUTPUTS_LIMIT} task runs were read; "
+            f"{len(wanted) - TASK_OUTPUTS_LIMIT} more task runs have outputs that are "
+            "shown as empty."
+        )
+    if warnings:
+        result["warning"] = " ".join(warnings)
+    return result
 
 
 def normalize_bulk_response(payload: Any) -> Any:

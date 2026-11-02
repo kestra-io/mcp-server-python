@@ -541,3 +541,33 @@ async def test_delete_execution(kestra_client, cleanup):
         await kestra_client.call_tool(
             "manage_executions", {"action": "get", "execution_id": execution_id}
         )
+
+
+@pytest.mark.asyncio
+async def test_executions_carry_task_outputs(kestra_client, cleanup):
+    """Task outputs are on the task runs on 1.x and 2.x alike.
+
+    Kestra 2.0 no longer puts them on the execution and serves them from
+    /outputs/tasks, so without the compat layer they come back empty on 2.x.
+    """
+    flow = await create_flow("task_outputs.yaml", kestra_client, cleanup)
+
+    result = await kestra_client.call_tool(
+        "execute_flow",
+        {"namespace": flow["namespace"], "flow_id": flow["id"], "wait": True},
+    )
+    executed = json.loads(result.content[0].text)
+    cleanup.track_execution(executed["id"])
+    assert executed["state"]["current"] == "SUCCESS"
+
+    result = await kestra_client.call_tool(
+        "manage_executions", {"action": "get", "execution_id": executed["id"]}
+    )
+    fetched = json.loads(result.content[0].text)
+
+    for execution in (executed, fetched):
+        outputs = {run["taskId"]: run.get("outputs") for run in execution["taskRunList"]}
+        assert outputs["greet"] == {"value": f"hello {executed['id']}"}
+        assert outputs["write"]["uri"].startswith("kestra:///")
+        assert outputs["write"]["uri"].endswith(".csv")
+        assert "warning" not in execution

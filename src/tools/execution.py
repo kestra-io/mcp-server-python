@@ -6,6 +6,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from kestra.compat import (
     attach_execution_outputs,
+    attach_task_outputs,
     execution_action_path,
     executions_search_params,
 )
@@ -137,7 +138,9 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             f"/executions/{namespace}/{flow_id}", params=params, files=files or None
         )
         resp.raise_for_status()
-        return await attach_execution_outputs(client, resp.json())
+        return await attach_task_outputs(
+            client, await attach_execution_outputs(client, resp.json())
+        )
 
     @mcp.tool()
     async def manage_executions(
@@ -200,7 +203,9 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         elif action == "get":
             resp = await client.get(f"/executions/{execution_id}")
             resp.raise_for_status()
-            return await attach_execution_outputs(client, resp.json())
+            return await attach_task_outputs(
+                client, await attach_execution_outputs(client, resp.json())
+            )
         elif action == "change_status":
             if not status:
                 raise ValueError("'status' is required for change_status action.")
