@@ -284,23 +284,28 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                         )
 
                     # Search for existing app by id and namespace
-                    search_resp = await client.get(
-                        "/apps/search",
-                        params={
-                            "q": app_id,
-                            "namespace": app_namespace,
-                            "flowId": app_flow_id,
-                        },
+                    params = await apps_search_params(
+                        client,
+                        query=app_id,
+                        namespace=app_namespace,
+                        flow_id=app_flow_id,
                     )
+                    search_resp = await client.get("/apps/search", params=params)
                     search_resp.raise_for_status()
                     search_results = search_resp.json()
+                    matched = [
+                        app
+                        for app in search_results.get("results", [])
+                        if app.get("id") == app_id
+                        and app.get("namespace") == app_namespace
+                    ]
 
-                    if not search_results["results"]:
+                    if not matched:
                         raise ValueError(
                             f"Could not find existing app with id '{app_id}' in namespace '{app_namespace}'"
                         )
 
-                    uid_val = search_results["results"][0]["uid"]
+                    uid_val = matched[0].get("uid")
                     if not uid_val:
                         raise ValueError("YAML must include 'uid' field for update.")
                     put_url = f"/apps/{uid_val}"
@@ -310,7 +315,7 @@ def register_ee_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                     # Handle 304 Not Modified response
                     if put_resp.status_code == 304:
                         # Return the existing app details from search results
-                        return search_results["results"][0]
+                        return matched[0]
                     put_resp.raise_for_status()
                     return put_resp.json()
                 raise

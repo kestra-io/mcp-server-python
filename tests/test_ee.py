@@ -1,12 +1,16 @@
 import pytest
-from fastmcp import Client
+from fastmcp import Client, FastMCP
 from dotenv import load_dotenv
 import json
 from pathlib import Path
 from test_utils import create_flow, create_test, create_app
 import time
 import os
+import sys
 import httpx
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+from tools.ee import register_ee_tools  # noqa: E402
 
 
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env", override=True)
@@ -907,6 +911,69 @@ async def test_configuration(kestra_client):
     assert "outputsInInternalStorageEnabled" in response_json and isinstance(
         response_json["outputsInInternalStorageEnabled"], bool
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [409, 422])
+async def test_manage_apps_update_uses_search_filters_and_matches_exact_app(
+    status_code,
+):
+    """When `POST /apps` returns 409 or 422, `manage_apps` searches with
+    `apps_search_params` and updates the app matching `id` and `namespace`."""
+    app_yaml = (
+        "id: app_get_data\n"
+        "type: io.kestra.plugin.ee.apps.Execution\n"
+        "displayName: Form to request and download data\n"
+        "namespace: company.team\n"
+        "flowId: get_data\n"
+    )
+    apps = [
+        {
+            "uid": "uid-other",
+            "id": "app_get_data_other",
+            "namespace": "company.team",
+            "flowId": "get_data",
+        },
+        {
+            "uid": "uid-target",
+            "id": "app_get_data",
+            "namespace": "company.team",
+            "flowId": "get_data",
+        },
+    ]
+    search_params: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal search_params
+        if request.url.path.endswith("/configs"):
+            return httpx.Response(200, json={"version": "2.0.6", "edition": "EE"})
+        if request.url.path.endswith("/apps") and request.method == "POST":
+            return httpx.Response(status_code, json={"message": "App already exists"})
+        if request.url.path.endswith("/apps/search"):
+            search_params = dict(request.url.params)
+            return httpx.Response(200, json={"results": apps, "total": 2})
+        if request.url.path.endswith("/apps/uid-target") and request.method == "PUT":
+            return httpx.Response(200, json=apps[1])
+        if "/apps/" in request.url.path and request.method == "PUT":
+            return httpx.Response(422, json={"message": "App already exists for id"})
+        return httpx.Response(404)
+
+    async with httpx.AsyncClient(
+        base_url="http://kestra/api/v1/demo", transport=httpx.MockTransport(handler)
+    ) as http:
+        mcp = FastMCP("test")
+        register_ee_tools(mcp, http)
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "manage_apps", {"action": "create", "yaml_source": app_yaml}
+            )
+    response = json.loads(result.content[0].text)
+    assert search_params == {
+        "filters[q][EQUALS]": "app_get_data",
+        "filters[namespace][EQUALS]": "company.team",
+        "filters[flowId][EQUALS]": "get_data",
+    }
+    assert response["uid"] == "uid-target"
 
 
 if __name__ == "__main__":
