@@ -12,7 +12,7 @@ def register_restart_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         namespace: Annotated[str, Field(description="The namespace of the flow")],
         flow_id: Annotated[str, Field(description="The ID of the flow")],
         execution_id: Annotated[
-            str,
+            str | None,
             Field(
                 description="The ID of the execution to restart. If not provided, the latest failed execution for the given namespace and flow_id is restarted."
             ),

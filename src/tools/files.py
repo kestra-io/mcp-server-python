@@ -10,20 +10,20 @@ def register_files_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
     async def namespace_file_action(
         namespace: Annotated[str, Field(description="The namespace to operate in")],
         path: Annotated[
-            str, Field(description="The file path. Not required for 'search' action.")
+            str | None, Field(description="The file path. Not required for 'search' action.")
         ] = None,
         action: Literal["get", "create", "move", "delete", "search"] = "get",
         file_content: Annotated[
-            bytes,
+            bytes | None,
             Field(
                 description="Required for 'create' action, the content of the file as bytes."
             ),
         ] = None,
         to_path: Annotated[
-            str, Field(description="Required for 'move' action, the destination path.")
+            str | None, Field(description="Required for 'move' action, the destination path.")
         ] = None,
         q: Annotated[
-            str,
+            str | None,
             Field(
                 description="Required for 'search' action, the query string for full-text search in file paths."
             ),
@@ -116,7 +116,7 @@ def register_files_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             Field(description="The action to perform: list, create, move, or delete"),
         ],
         to_path: Annotated[
-            str, Field(description="Required for 'move' action, the destination path.")
+            str | None, Field(description="Required for 'move' action, the destination path.")
         ] = None,
     ) -> dict:
         """Perform a directory operation in the given namespace."""

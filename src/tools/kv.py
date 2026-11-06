@@ -21,7 +21,7 @@ def register_kv_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             Field(description="The operation to perform: get, set, list, or delete"),
         ],
         key: Annotated[
-            str, Field(description="Required for 'get', 'set', and 'delete' actions")
+            str | None, Field(description="Required for 'get', 'set', and 'delete' actions")
         ] = None,
         value: Annotated[Any, Field(description="Required for 'set' action")] = None,
     ) -> dict:

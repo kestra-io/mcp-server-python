@@ -87,13 +87,13 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             ),
         ] = False,
         inputs: Annotated[
-            dict,
+            dict | None,
             Field(
                 description="The inputs to the flow which must be provided as a flat dictionary, e.g. {'user': 'Harry Potter'}. Do NOT use a list of {'key': ..., 'value': ...} objects for inputs. Default is an empty dictionary."
             ),
         ] = None,
         labels: Annotated[
-            dict,
+            dict | None,
             Field(
                 description="The labels for the execution as a flat dictionary, e.g. {'environment': 'test', 'project': 'hogwarts'}. Default is no labels."
             ),
@@ -154,7 +154,7 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             str, Field(description="The execution ID to operate on")
         ],
         status: Annotated[
-            str,
+            str | None,
             Field(
                 description="The new status for 'change_status' action. Required for 'change_status' action."
             ),
@@ -275,7 +275,7 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             str, Field(description="Optional flow ID to filter executions")
         ] = "",
         count: Annotated[
-            int,
+            int | None,
             Field(
                 description="Optional number of most recent executions to return. If None, returns all executions within the date range."
             ),
