@@ -121,8 +121,17 @@ async def get_latest_execution(
     # Imported here rather than at module level because compat imports this module.
     from kestra.compat import executions_search_params
 
+    # /executions/search is oldest-first. Without a descending sort the first
+    # page is the oldest matches, so once there are more than `size` of them
+    # the newest of that page is not the latest execution. `field:direction`
+    # is the form PageableUtils accepts on 1.x and 2.x.
     params = await executions_search_params(
-        client, namespace=namespace, flow_id=flow_id, state=state or None, size=25
+        client,
+        namespace=namespace,
+        flow_id=flow_id,
+        state=state or None,
+        size=25,
+        sort="state.startDate:desc",
     )
     resp = await client.get("/executions/search", params=params)
     resp.raise_for_status()
