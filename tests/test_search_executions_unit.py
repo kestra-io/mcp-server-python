@@ -17,6 +17,7 @@ from fastmcp import Client, FastMCP
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+from kestra.constants import _SEARCHABLE_STATES, _VALID_STATES  # noqa: E402
 from tools import execution  # noqa: E402
 from tools.execution import (  # noqa: E402
     _failed_task_ids,
@@ -48,7 +49,11 @@ def _execution(id_, state="FAILED", task_runs=None, labels=None, inputs=None):
 
 
 def _task_run(task_id, state):
-    return {"id": f"tr-{task_id}-{state}", "taskId": task_id, "state": {"current": state}}
+    return {
+        "id": f"tr-{task_id}-{state}",
+        "taskId": task_id,
+        "state": {"current": state},
+    }
 
 
 class FakeKestra:
@@ -94,7 +99,8 @@ class FakeKestra:
 async def _call(fake: FakeKestra, **arguments) -> dict:
     mcp = FastMCP("test")
     client = httpx.AsyncClient(
-        base_url="http://kestra/api/v1/main", transport=httpx.MockTransport(fake.handler)
+        base_url="http://kestra/api/v1/main",
+        transport=httpx.MockTransport(fake.handler),
     )
     execution.register_execution_tools(mcp, client)
     async with Client(mcp) as c:
@@ -241,7 +247,13 @@ async def test_failed_tasks_come_from_the_search_result_on_1x():
     """1.x search results carry taskRunList, so no execution is read again."""
     fake = FakeKestra(
         results=[
-            _execution("f1", task_runs=[_task_run("extract", "SUCCESS"), _task_run("load", "FAILED")]),
+            _execution(
+                "f1",
+                task_runs=[
+                    _task_run("extract", "SUCCESS"),
+                    _task_run("load", "FAILED"),
+                ],
+            ),
             _execution("s1", "SUCCESS", task_runs=[_task_run("extract", "SUCCESS")]),
         ],
         total=2,
@@ -261,11 +273,17 @@ async def test_failed_tasks_are_read_per_failed_execution_on_2x():
         total=3,
         details={
             "f1": _execution("f1", task_runs=[_task_run("load", "FAILED")]),
-            "f2": _execution("f2", task_runs=[_task_run("a", "FAILED"), _task_run("b", "FAILED")]),
+            "f2": _execution(
+                "f2", task_runs=[_task_run("a", "FAILED"), _task_run("b", "FAILED")]
+            ),
         },
     )
     out = await _call(fake)
-    assert [r.get("failedTasks") for r in out["results"]] == [["load"], None, ["a", "b"]]
+    assert [r.get("failedTasks") for r in out["results"]] == [
+        ["load"],
+        None,
+        ["a", "b"],
+    ]
     read = sorted(r.url.path.rsplit("/", 1)[1] for r in fake.requests[1:])
     assert read == ["f1", "f2"]
 
@@ -319,6 +337,71 @@ def test_summary_omits_labels_when_only_system_ones_exist():
     assert "labels" not in _search_summary(e, include_inputs=False)
 
 
+# The `State.Type` enum of Kestra 1.3 and 2.0, read from their class files.
+# 1.0 lacks SUBMITTED and RESUBMITTED and answers a search for them with a 422.
+KESTRA_STATES = [
+    "BREAKPOINT",
+    "CANCELLED",
+    "CREATED",
+    "FAILED",
+    "KILLED",
+    "KILLING",
+    "PAUSED",
+    "QUEUED",
+    "RESTARTED",
+    "RESUBMITTED",
+    "RETRIED",
+    "RETRYING",
+    "RUNNING",
+    "SKIPPED",
+    "SUBMITTED",
+    "SUCCESS",
+    "WARNING",
+]
+
+
+def test_searchable_states_are_exactly_kestras_states():
+    assert sorted(_SEARCHABLE_STATES) == KESTRA_STATES
+
+
+def test_change_status_validation_is_not_widened():
+    # The server only accepts terminal states (and RESUBMITTED) there, so the
+    # set gating `change_status` stays as it was.
+    assert {"SUBMITTED", "BREAKPOINT", "RESUBMITTED"}.isdisjoint(_VALID_STATES)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("state", KESTRA_STATES)
+async def test_every_kestra_state_is_searchable(state):
+    fake = FakeKestra(results=[], total=0)
+    await _call(fake, state=[state.lower()])
+    assert dict(fake.search_params())["filters[state][IN]"] == state
+
+
+@pytest.mark.asyncio
+async def test_a_rejected_search_reports_kestras_reason():
+    class Rejecting(FakeKestra):
+        def handler(self, request):
+            self.requests.append(request)
+            return httpx.Response(
+                422,
+                json={
+                    "message": "Illegal argument: No enum constant State.Type.SUBMITTED"
+                },
+            )
+
+    with pytest.raises(Exception, match="No enum constant.*SUBMITTED"):
+        await _call(Rejecting(results=[], total=0), state=["SUBMITTED"])
+
+
+@pytest.mark.asyncio
+async def test_all_states_at_once_are_sent_as_one_in_value():
+    fake = FakeKestra(results=[], total=0)
+    await _call(fake, state=KESTRA_STATES)
+    sent = dict(fake.search_params())["filters[state][IN]"]
+    assert sent.split(",") == KESTRA_STATES
+
+
 def test_validate_states_normalizes_and_deduplicates():
     assert _validate_states([" failed", "FAILED", "killed"]) == ["FAILED", "KILLED"]
     assert _validate_states(None) == []
@@ -340,7 +423,10 @@ NOW = datetime(2026, 11, 10, 18, 30, 15, tzinfo=timezone.utc)
         ("PT1H", "2026-11-10T17:30:15Z"),  # sub-day: exact
         ("PT5M", "2026-11-10T18:25:15Z"),
         ("P1DT1H", "2026-11-09T17:30:15Z"),  # mixed: exact, no snap
-        ("PT24H", "2026-11-09T00:00:00Z"),  # whole days snap, as list_executions always did
+        (
+            "PT24H",
+            "2026-11-09T00:00:00Z",
+        ),  # whole days snap, as list_executions always did
         ("PT48H", "2026-11-08T00:00:00Z"),
         ("", "2026-08-12T00:00:00Z"),  # default 90 days
     ],
@@ -350,7 +436,10 @@ def test_start_date_window(time_range, expected):
 
 
 def test_explicit_start_date_wins_over_time_range():
-    assert _resolve_start_date("2026-01-01T00:00:00Z", "PT5M", now=NOW) == "2026-01-01T00:00:00Z"
+    assert (
+        _resolve_start_date("2026-01-01T00:00:00Z", "PT5M", now=NOW)
+        == "2026-01-01T00:00:00Z"
+    )
 
 
 def test_unsupported_duration_is_rejected():

@@ -1,11 +1,13 @@
-from fastmcp import FastMCP
 import asyncio
-import httpx
 import logging
-from typing import Annotated, Any, Literal, List
-from pydantic import Field
 import re
 from datetime import datetime, timedelta, timezone
+from typing import Annotated, Any, List, Literal
+
+import httpx
+from fastmcp import FastMCP
+from pydantic import Field
+
 from kestra.compat import (
     attach_execution_outputs,
     attach_task_outputs,
@@ -13,12 +15,13 @@ from kestra.compat import (
     executions_filter_params,
     executions_search_params,
 )
-from kestra.utils import _parse_iso
 from kestra.constants import (
-    _VALID_STATES,
-    _TERMINAL_STATES,
     _RESERVED_FLOW_IDS,
+    _SEARCHABLE_STATES,
+    _TERMINAL_STATES,
+    _VALID_STATES,
 )
+from kestra.utils import _parse_iso
 
 logger = logging.getLogger(__name__)
 
@@ -74,11 +77,11 @@ def _validate_states(states: list[str] | None) -> list[str]:
     if not states:
         return []
     normalized = [s.strip().upper() for s in states if s and s.strip()]
-    invalid = sorted(set(normalized) - _VALID_STATES)
+    invalid = sorted(set(normalized) - _SEARCHABLE_STATES)
     if invalid:
         raise ValueError(
             f"Invalid state(s): {', '.join(invalid)}. "
-            f"Must be any of: {', '.join(sorted(_VALID_STATES))}"
+            f"Must be any of: {', '.join(sorted(_SEARCHABLE_STATES))}"
         )
     return list(dict.fromkeys(normalized))
 
@@ -492,41 +495,54 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                 description=(
                     "Execution states to match, any of them, e.g. ['FAILED'] or "
                     "['FAILED', 'KILLED']. Leave empty to match every state. Valid: "
-                    + ", ".join(sorted(_VALID_STATES))
+                    + ", ".join(sorted(_SEARCHABLE_STATES))
                 )
             ),
         ] = None,
         namespace: Annotated[
             str | None,
-            Field(description="Namespace to search in. Leave empty to search all namespaces."),
+            Field(
+                description=(
+                    "Namespace to search in. Leave empty to search all namespaces."
+                )
+            ),
         ] = None,
         include_child_namespaces: Annotated[
             bool,
             Field(
                 description=(
-                    "Also match the child namespaces of `namespace`, e.g. 'company' then "
-                    "matches 'company.team' too. Default false: the namespace must match exactly."
+                    "Also match the child namespaces of `namespace`, e.g. 'company' "
+                    "then matches 'company.team' too. Default false: the namespace "
+                    "must match exactly."
                 )
             ),
         ] = False,
         flow_id: Annotated[
-            str | None, Field(description="Flow ID to match. Usually combined with `namespace`.")
+            str | None,
+            Field(description="Flow ID to match. Usually combined with `namespace`."),
         ] = None,
         labels: Annotated[
             dict[str, str] | None,
-            Field(description="Labels the execution must all carry, e.g. {'env': 'prod'}."),
+            Field(
+                description="Labels the execution must all carry, e.g. {'env': 'prod'}."
+            ),
         ] = None,
         query: Annotated[
             str | None,
-            Field(description="Free-text query, matched by Kestra against fields such as the namespace and flow ID."),
+            Field(
+                description=(
+                    "Free-text query, matched by Kestra against fields such as the "
+                    "namespace and flow ID."
+                )
+            ),
         ] = None,
         time_range: Annotated[
             str | None,
             Field(
                 description=(
-                    "Relative window as an ISO 8601 duration ending now, e.g. 'PT1H', 'P1D', "
-                    "'P7D'. Whole-day durations start at midnight. Defaults to 'P90D' when "
-                    "neither this nor start_date is given."
+                    "Relative window as an ISO 8601 duration ending now, e.g. "
+                    "'PT1H', 'P1D', 'P7D'. Whole-day durations start at midnight. "
+                    "Defaults to 'P90D' when neither this nor start_date is given."
                 )
             ),
         ] = None,
@@ -534,33 +550,52 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             str | None,
             Field(
                 description=(
-                    "Absolute start of the window in ISO 8601, e.g. '2026-04-01T00:00:00Z'. "
-                    "Takes precedence over time_range."
+                    "Absolute start of the window in ISO 8601, e.g. "
+                    "'2026-04-01T00:00:00Z'. Takes precedence over time_range."
                 )
             ),
         ] = None,
         end_date: Annotated[
             str | None,
-            Field(description="Absolute end of the window in ISO 8601, e.g. '2026-04-30T23:59:59Z'."),
+            Field(
+                description=(
+                    "Absolute end of the window in ISO 8601, e.g. "
+                    "'2026-04-30T23:59:59Z'."
+                )
+            ),
         ] = None,
         limit: Annotated[
             int,
             Field(
                 ge=1,
                 le=_SEARCH_LIMIT_MAX,
-                description=f"Executions per page, 1 to {_SEARCH_LIMIT_MAX}. Default 25.",
+                description=(
+                    f"Executions per page, 1 to {_SEARCH_LIMIT_MAX}. Default 25."
+                ),
             ),
         ] = 25,
         page: Annotated[
             int,
-            Field(ge=1, description="Page to return, starting at 1. Use when `has_more` is true."),
+            Field(
+                ge=1,
+                description=(
+                    "Page to return, starting at 1. Use when `has_more` is true."
+                ),
+            ),
         ] = 1,
         include_inputs: Annotated[
             bool,
-            Field(description="Include each execution's inputs. Off by default, as they can be large."),
+            Field(
+                description=(
+                    "Include each execution's inputs. Off by default, as they can "
+                    "be large."
+                )
+            ),
         ] = False,
     ) -> dict:
-        """Search executions by state, namespace, flow, labels, text and time window, newest first.
+        """Search executions by state, namespace, flow, labels, text and time window.
+
+        Results are newest first.
 
         All filtering, sorting and paging happen on the Kestra server, and each call
         reads a single page, so it stays fast and small on instances with millions of
@@ -596,6 +631,15 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             sort="state.startDate:desc",
         )
         resp = await client.get("/executions/search", params=params)
+        if resp.status_code == 422:
+            # Kestra names the offending value, e.g. a state the server version
+            # does not have ("No enum constant ...State.Type.SUBMITTED" on 1.0).
+            try:
+                body = resp.json()
+                detail = body.get("detail") or body.get("message") or resp.text
+            except ValueError:
+                detail = resp.text
+            raise ValueError(f"Kestra rejected the search: {detail}")
         resp.raise_for_status()
         data = resp.json()
         batch = data.get("results") or []
@@ -634,7 +678,9 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
                         "GET /executions/%s answered %s", execution["id"], r.status_code
                     )
                 except (httpx.HTTPError, ValueError) as e:
-                    logger.warning("Execution %s could not be read: %s", execution["id"], e)
+                    logger.warning(
+                        "Execution %s could not be read: %s", execution["id"], e
+                    )
                 return None
 
         full = await asyncio.gather(*(read_task_runs(e) for _, e in failed))

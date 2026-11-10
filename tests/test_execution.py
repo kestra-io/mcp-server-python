@@ -600,11 +600,15 @@ async def test_search_executions(kestra_client, cleanup):
         )
         ids[flow_id] = _exec_id(result)
         cleanup.track_execution(ids[flow_id])
-        await poll_for_execution(kestra_client, ids[flow_id], max_retries=20, retry_interval=1)
+        await poll_for_execution(
+            kestra_client, ids[flow_id], max_retries=20, retry_interval=1
+        )
     labels = {"run": run}
 
     # State filter: only the failure, with the task that failed.
-    out = await _search(kestra_client, state=["FAILED"], labels=labels, time_range="PT1H")
+    out = await _search(
+        kestra_client, state=["FAILED"], labels=labels, time_range="PT1H"
+    )
     assert out["total"] == 1 and out["has_more"] is False
     [failed] = out["results"]
     assert failed["id"] == ids["search_failing"]
@@ -631,7 +635,8 @@ async def test_search_executions(kestra_client, cleanup):
         labels=labels,
     )
     # Newest first: the failing flow ran second.
-    assert [e["id"] for e in out["results"]] == [ids["search_failing"], ids["search_ok"]]
+    newest_first = [ids["search_failing"], ids["search_ok"]]
+    assert [e["id"] for e in out["results"]] == newest_first
 
     # Flow filter.
     out = await _search(kestra_client, flow_id="search_ok", labels=labels)
@@ -652,7 +657,10 @@ async def test_search_executions(kestra_client, cleanup):
 
     # A window that ends before the runs excludes them.
     out = await _search(
-        kestra_client, labels=labels, start_date="2020-01-01T00:00:00Z", end_date="2020-01-02T00:00:00Z"
+        kestra_client,
+        labels=labels,
+        start_date="2020-01-01T00:00:00Z",
+        end_date="2020-01-02T00:00:00Z",
     )
     assert out["total"] == 0
 
@@ -661,3 +669,22 @@ async def test_search_executions(kestra_client, cleanup):
 async def test_search_executions_rejects_an_unknown_state(kestra_client):
     with pytest.raises(Exception, match="NOPE"):
         await kestra_client.call_tool("search_executions", {"state": ["NOPE"]})
+
+
+@pytest.mark.asyncio
+async def test_search_executions_accepts_every_kestra_state(kestra_client):
+    """Each state is accepted by the tool and by the server (Kestra 1.1 or later;
+    1.0 has no SUBMITTED or RESUBMITTED)."""
+    states = (
+        "BREAKPOINT CANCELLED CREATED FAILED KILLED KILLING PAUSED QUEUED RESTARTED "
+        "RESUBMITTED RETRIED RETRYING RUNNING SKIPPED SUBMITTED SUCCESS WARNING"
+    ).split()
+    for state in states:
+        try:
+            out = await _search(kestra_client, state=[state], limit=1)
+        except Exception as e:
+            if state in ("SUBMITTED", "RESUBMITTED") and "No enum constant" in str(e):
+                continue  # Kestra 1.0
+            raise
+        assert isinstance(out["total"], int), state
+        assert all(e["state"]["current"] == state for e in out["results"]), state
