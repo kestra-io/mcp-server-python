@@ -1,0 +1,47 @@
+name: Security scan
+
+# Secrets (TruffleHog), static analysis (OpenGrep) and dependencies (Trivy) through kestra-io/actions' reusable
+# workflow. Findings of the main branch go to Elastic, where the security controller tower tracks them; the tower's
+# nightly sweep starts this workflow through workflow_dispatch (the metadata input is required for that).
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+    inputs:
+      metadata:
+        description: 'Extra key=value pairs added to every finding, one per line'
+        required: false
+        type: string
+        default: ''
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+  checks: write
+  pull-requests: write
+  packages: read
+
+jobs:
+  scan:
+    name: Security - Static analysis, CVE & secrets
+    uses: kestra-io/actions/.github/workflows/security-scan.yml@main
+    with:
+      metadata: ${{ github.event.inputs.metadata }}
+      components: |
+        backend=**
+      java-sbom-path: ''
+      dependencies-path: .
+    secrets:
+      OTLP_ENDPOINT: ${{ secrets.OTLP_ENDPOINT }}
+      OTLP_HEADERS: ${{ secrets.OTLP_HEADERS }}
