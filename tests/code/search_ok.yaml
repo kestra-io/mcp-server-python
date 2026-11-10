@@ -1,0 +1,7 @@
+id: search_ok
+namespace: company.team.search
+
+tasks:
+  - id: hello
+    type: io.kestra.plugin.core.log.Log
+    message: Hello from search_executions!

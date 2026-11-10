@@ -6,6 +6,7 @@ from test_utils import create_flow, poll_for_execution
 import time
 from datetime import datetime, timezone
 import asyncio
+import uuid
 
 load_dotenv(dotenv_path=Path(__file__).parent.parent.parent / ".env", override=True)
 
@@ -571,3 +572,92 @@ async def test_executions_carry_task_outputs(kestra_client, cleanup):
         assert outputs["write"]["uri"].startswith("kestra:///")
         assert outputs["write"]["uri"].endswith(".csv")
         assert "warning" not in execution
+
+
+async def _search(client, **arguments) -> dict:
+    result = await client.call_tool("search_executions", arguments)
+    return json.loads(result.content[0].text)
+
+
+@pytest.mark.asyncio
+async def test_search_executions(kestra_client, cleanup):
+    """search_executions filters on the server, on both Kestra majors.
+
+    A succeeding flow in `company.team.search` runs first, then a failing one in
+    its child namespace, both tagged with a label unique to this run so that
+    executions left by other tests cannot match.
+    """
+    run = f"search-{uuid.uuid4().hex[:12]}"
+    ids = {}
+    for file, namespace, flow_id in (
+        ("search_ok.yaml", "company.team.search", "search_ok"),
+        ("search_failing.yaml", "company.team.search.child", "search_failing"),
+    ):
+        await create_flow(file, kestra_client, cleanup)
+        result = await kestra_client.call_tool(
+            "execute_flow",
+            {"namespace": namespace, "flow_id": flow_id, "labels": {"run": run}},
+        )
+        ids[flow_id] = _exec_id(result)
+        cleanup.track_execution(ids[flow_id])
+        await poll_for_execution(kestra_client, ids[flow_id], max_retries=20, retry_interval=1)
+    labels = {"run": run}
+
+    # State filter: only the failure, with the task that failed.
+    out = await _search(kestra_client, state=["FAILED"], labels=labels, time_range="PT1H")
+    assert out["total"] == 1 and out["has_more"] is False
+    [failed] = out["results"]
+    assert failed["id"] == ids["search_failing"]
+    assert failed["state"]["current"] == "FAILED"
+    assert failed["failedTasks"] == ["boom"]
+    assert failed["labels"] == {"run": run}
+
+    # Several states at once.
+    out = await _search(kestra_client, state=["FAILED", "SUCCESS"], labels=labels)
+    assert out["total"] == 2
+
+    # A state nothing is in.
+    out = await _search(kestra_client, state=["KILLED"], labels=labels)
+    assert out == {"total": 0, "page": 1, "limit": 25, "has_more": False, "results": []}
+
+    # The namespace matches exactly by default, children only on request.
+    out = await _search(kestra_client, namespace="company.team.search", labels=labels)
+    assert [e["id"] for e in out["results"]] == [ids["search_ok"]]
+    assert "failedTasks" not in out["results"][0]
+    out = await _search(
+        kestra_client,
+        namespace="company.team.search",
+        include_child_namespaces=True,
+        labels=labels,
+    )
+    # Newest first: the failing flow ran second.
+    assert [e["id"] for e in out["results"]] == [ids["search_failing"], ids["search_ok"]]
+
+    # Flow filter.
+    out = await _search(kestra_client, flow_id="search_ok", labels=labels)
+    assert [e["id"] for e in out["results"]] == [ids["search_ok"]]
+
+    # Paging at the boundary: a limit below, at and past the two matches.
+    page1 = await _search(kestra_client, labels=labels, limit=1)
+    assert (page1["total"], len(page1["results"]), page1["has_more"]) == (2, 1, True)
+    page2 = await _search(kestra_client, labels=labels, limit=1, page=2)
+    assert (len(page2["results"]), page2["has_more"]) == (1, False)
+    assert page1["results"][0]["id"] == ids["search_failing"]
+    assert page2["results"][0]["id"] == ids["search_ok"]
+    for limit in (2, 3):
+        out = await _search(kestra_client, labels=labels, limit=limit)
+        assert (len(out["results"]), out["has_more"]) == (2, False)
+    out = await _search(kestra_client, labels=labels, limit=1, page=3)
+    assert (out["total"], out["results"], out["has_more"]) == (2, [], False)
+
+    # A window that ends before the runs excludes them.
+    out = await _search(
+        kestra_client, labels=labels, start_date="2020-01-01T00:00:00Z", end_date="2020-01-02T00:00:00Z"
+    )
+    assert out["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_search_executions_rejects_an_unknown_state(kestra_client):
+    with pytest.raises(Exception, match="NOPE"):
+        await kestra_client.call_tool("search_executions", {"state": ["NOPE"]})

@@ -245,6 +245,57 @@ async def executions_search_params(
     return params
 
 
+def executions_filter_params(
+    *,
+    states: Optional[list[str]] = None,
+    namespace: Optional[str] = None,
+    include_child_namespaces: bool = False,
+    flow_id: Optional[str] = None,
+    labels: Any = None,
+    query: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    page: Optional[int] = None,
+    size: Optional[int] = None,
+    sort: Optional[str] = None,
+) -> dict:
+    """Query parameters for `GET /executions/search` in the `filters` model only.
+
+    Unlike the other builders this one is the same for both majors. Kestra 1.x
+    accepts the `filters[field][OPERATION]` model next to its flat parameters
+    (checked on 1.0 and 1.3), and it is the only way to express what this
+    search needs there: several states at once, and a namespace matched
+    exactly, since the flat 1.x `namespace` is always a prefix. The two
+    dialects cannot be mixed, because a 1.x server that receives any `filters`
+    key ignores the flat ones.
+
+    `states` is sent as one comma-joined `IN` value; repeating the key matches
+    nothing on either major.
+    """
+    params: dict[str, Any] = {}
+    if page is not None:
+        params["page"] = page
+    if size is not None:
+        params["size"] = size
+    if sort:
+        params["sort"] = sort
+
+    if states:
+        _add(params, "state", "IN", ",".join(states))
+    _add(
+        params,
+        "namespace",
+        "PREFIX" if include_child_namespaces else "EQUALS",
+        namespace,
+    )
+    _add(params, "flowId", "EQUALS", flow_id)
+    _add(params, "q", "EQUALS", query)
+    _add(params, "startDate", "GREATER_THAN_OR_EQUAL_TO", start_date)
+    _add(params, "endDate", "LESS_THAN_OR_EQUAL_TO", end_date)
+    _add_labels(params, labels)
+    return params
+
+
 async def flows_search_params(
     client: httpx.AsyncClient,
     *,

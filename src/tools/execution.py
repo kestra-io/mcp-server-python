@@ -1,5 +1,7 @@
 from fastmcp import FastMCP
+import asyncio
 import httpx
+import logging
 from typing import Annotated, Any, Literal, List
 from pydantic import Field
 import re
@@ -8,6 +10,7 @@ from kestra.compat import (
     attach_execution_outputs,
     attach_task_outputs,
     execution_action_path,
+    executions_filter_params,
     executions_search_params,
 )
 from kestra.utils import _parse_iso
@@ -16,6 +19,8 @@ from kestra.constants import (
     _TERMINAL_STATES,
     _RESERVED_FLOW_IDS,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_iso_duration(duration: str) -> timedelta:
@@ -34,6 +39,93 @@ def _parse_iso_duration(duration: str) -> timedelta:
     minutes = int(m.group(3) or 0)
     seconds = int(m.group(4) or 0)
     return timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
+
+
+def _resolve_start_date(
+    start_date: str, time_range: str, now: datetime | None = None
+) -> str:
+    """The absolute startDate to send to `/executions/search`.
+
+    An explicit `start_date` wins. Otherwise `time_range` is subtracted from now,
+    and without either the window is the last 90 days. Day-only durations snap
+    back to midnight so "last 10 days" includes the whole of the boundary day,
+    not just the past 240 hours. An explicit date is always sent rather than the
+    API's `timeRange`, whose exact-hour arithmetic excludes that boundary day.
+    """
+    if start_date:
+        return start_date
+    now = now or datetime.now(timezone.utc)
+    delta = _parse_iso_duration(time_range) if time_range else timedelta(days=90)
+    point = now - delta
+    # Whole-day durations, including PT24H, which normalizes to one day.
+    if delta.seconds == 0 and delta.microseconds == 0:
+        point = point.replace(hour=0, minute=0, second=0, microsecond=0)
+    return point.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+# Upper bound on `search_executions(limit=...)`. Every page is one request, so
+# this also bounds the size of a single tool response.
+_SEARCH_LIMIT_MAX = 100
+# Parallel `GET /executions/{id}` reads used for `failedTasks` on Kestra 2.x.
+_FAILED_TASKS_CONCURRENCY = 8
+
+
+def _validate_states(states: list[str] | None) -> list[str]:
+    if not states:
+        return []
+    normalized = [s.strip().upper() for s in states if s and s.strip()]
+    invalid = sorted(set(normalized) - _VALID_STATES)
+    if invalid:
+        raise ValueError(
+            f"Invalid state(s): {', '.join(invalid)}. "
+            f"Must be any of: {', '.join(sorted(_VALID_STATES))}"
+        )
+    return list(dict.fromkeys(normalized))
+
+
+def _failed_task_ids(execution: dict) -> list[str]:
+    """IDs of the tasks whose run ended FAILED, in run order, without repeats."""
+    return list(
+        dict.fromkeys(
+            task_run.get("taskId")
+            for task_run in execution.get("taskRunList") or []
+            if isinstance(task_run, dict)
+            and (task_run.get("state") or {}).get("current") == "FAILED"
+            and task_run.get("taskId")
+        )
+    )
+
+
+def _search_summary(execution: dict, include_inputs: bool) -> dict[str, Any]:
+    """The fields of an execution `search_executions` returns.
+
+    Labels are flattened to a dict, without the `system.*` labels Kestra adds
+    to every execution, which carry no information for a search result.
+    """
+    state = execution.get("state") or {}
+    summary: dict[str, Any] = {
+        "id": execution.get("id"),
+        "namespace": execution.get("namespace"),
+        "flowId": execution.get("flowId"),
+        "state": {
+            "current": state.get("current"),
+            "startDate": state.get("startDate"),
+            "endDate": state.get("endDate"),
+            "duration": state.get("duration"),
+        },
+    }
+    labels = {
+        label["key"]: label.get("value")
+        for label in execution.get("labels") or []
+        if isinstance(label, dict)
+        and label.get("key")
+        and not str(label["key"]).startswith("system.")
+    }
+    if labels:
+        summary["labels"] = labels
+    if include_inputs and execution.get("inputs"):
+        summary["inputs"] = execution["inputs"]
+    return summary
 
 
 def _normalize_labels(labels) -> list[dict]:
@@ -332,31 +424,7 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
         Only include fields that exist in the object."""
         all_execs: List[dict] = []
         page = 1
-
-        # Resolve the startDate sent to the API.
-        # We always compute an explicit startDate rather than relying on the API's
-        # `timeRange` query param, which (a) may not be supported as a flat param
-        # and (b) uses exact-hour arithmetic that silently excludes boundary days.
-        # For day-granularity ranges we snap to midnight so "last 10 days" includes
-        # the whole of the day 10 days ago, not just the past 240 hours.
-        now = datetime.now(timezone.utc)
-        if start_date:
-            effective_start_date = start_date
-        elif time_range:
-            delta = _parse_iso_duration(time_range)
-            point = now - delta
-            # Day-only durations (no sub-day component): snap back to midnight so the
-            # entire boundary day is included rather than just the last N*24 hours.
-            if delta.seconds == 0 and delta.microseconds == 0:
-                point = point.replace(hour=0, minute=0, second=0, microsecond=0)
-            effective_start_date = point.strftime("%Y-%m-%dT%H:%M:%SZ")
-        else:
-            # Default: start of day 90 days ago
-            effective_start_date = (
-                (now - timedelta(days=90))
-                .replace(hour=0, minute=0, second=0, microsecond=0)
-                .strftime("%Y-%m-%dT%H:%M:%SZ")
-            )
+        effective_start_date = _resolve_start_date(start_date, time_range)
 
         while True:
             params = await executions_search_params(
@@ -415,3 +483,178 @@ def register_execution_tools(mcp: FastMCP, client: httpx.AsyncClient) -> None:
             return slim
 
         return {"results": [_slim(e) for e in all_execs]}
+
+    @mcp.tool()
+    async def search_executions(
+        state: Annotated[
+            list[str] | None,
+            Field(
+                description=(
+                    "Execution states to match, any of them, e.g. ['FAILED'] or "
+                    "['FAILED', 'KILLED']. Leave empty to match every state. Valid: "
+                    + ", ".join(sorted(_VALID_STATES))
+                )
+            ),
+        ] = None,
+        namespace: Annotated[
+            str | None,
+            Field(description="Namespace to search in. Leave empty to search all namespaces."),
+        ] = None,
+        include_child_namespaces: Annotated[
+            bool,
+            Field(
+                description=(
+                    "Also match the child namespaces of `namespace`, e.g. 'company' then "
+                    "matches 'company.team' too. Default false: the namespace must match exactly."
+                )
+            ),
+        ] = False,
+        flow_id: Annotated[
+            str | None, Field(description="Flow ID to match. Usually combined with `namespace`.")
+        ] = None,
+        labels: Annotated[
+            dict[str, str] | None,
+            Field(description="Labels the execution must all carry, e.g. {'env': 'prod'}."),
+        ] = None,
+        query: Annotated[
+            str | None,
+            Field(description="Free-text query, matched by Kestra against fields such as the namespace and flow ID."),
+        ] = None,
+        time_range: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "Relative window as an ISO 8601 duration ending now, e.g. 'PT1H', 'P1D', "
+                    "'P7D'. Whole-day durations start at midnight. Defaults to 'P90D' when "
+                    "neither this nor start_date is given."
+                )
+            ),
+        ] = None,
+        start_date: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "Absolute start of the window in ISO 8601, e.g. '2026-04-01T00:00:00Z'. "
+                    "Takes precedence over time_range."
+                )
+            ),
+        ] = None,
+        end_date: Annotated[
+            str | None,
+            Field(description="Absolute end of the window in ISO 8601, e.g. '2026-04-30T23:59:59Z'."),
+        ] = None,
+        limit: Annotated[
+            int,
+            Field(
+                ge=1,
+                le=_SEARCH_LIMIT_MAX,
+                description=f"Executions per page, 1 to {_SEARCH_LIMIT_MAX}. Default 25.",
+            ),
+        ] = 25,
+        page: Annotated[
+            int,
+            Field(ge=1, description="Page to return, starting at 1. Use when `has_more` is true."),
+        ] = 1,
+        include_inputs: Annotated[
+            bool,
+            Field(description="Include each execution's inputs. Off by default, as they can be large."),
+        ] = False,
+    ) -> dict:
+        """Search executions by state, namespace, flow, labels, text and time window, newest first.
+
+        All filtering, sorting and paging happen on the Kestra server, and each call
+        reads a single page, so it stays fast and small on instances with millions of
+        executions. Use it, for instance, to find the latest failures:
+        `search_executions(state=['FAILED'], time_range='P1D', limit=10)`.
+
+        Returns:
+        - total: how many executions match, across all pages
+        - page, limit: the page returned and its size
+        - has_more: true when more matching executions exist on later pages
+        - results: executions, each with id, namespace, flowId, state (current,
+          startDate, endDate, duration), labels (without the system.* ones), inputs
+          (only with include_inputs) and, for FAILED executions, failedTasks: the IDs
+          of the tasks that failed
+        - warning: present only when failedTasks could not be read for some executions
+
+        Report the total, and say so when has_more is true rather than presenting the
+        page as the complete result. Format each execution as a markdown list item
+        with its ID, flow (namespace.flowId), state, start date and, when present,
+        failed tasks."""
+        states = _validate_states(state)
+        params = executions_filter_params(
+            states=states,
+            namespace=namespace or None,
+            include_child_namespaces=include_child_namespaces,
+            flow_id=flow_id or None,
+            labels=labels or None,
+            query=query or None,
+            start_date=_resolve_start_date(start_date or "", time_range or ""),
+            end_date=end_date or None,
+            page=page,
+            size=limit,
+            sort="state.startDate:desc",
+        )
+        resp = await client.get("/executions/search", params=params)
+        resp.raise_for_status()
+        data = resp.json()
+        batch = data.get("results") or []
+        total = data.get("total")
+        if not batch and page > 1:
+            # Past the last page Kestra answers `total: 0`, which would read as
+            # "nothing matches". Ask for the first page to learn the real count.
+            first = await client.get(
+                "/executions/search", params={**params, "page": 1, "size": 1}
+            )
+            first.raise_for_status()
+            total = first.json().get("total")
+        if total is None:
+            total = (page - 1) * limit + len(batch)
+
+        results = [_search_summary(e, include_inputs) for e in batch]
+
+        # 1.x carries taskRunList in search results; 2.x drops it there, so the
+        # failed executions of the page are read one by one instead.
+        failed = [
+            (summary, execution)
+            for summary, execution in zip(results, batch)
+            if summary["state"]["current"] == "FAILED"
+        ]
+        semaphore = asyncio.Semaphore(_FAILED_TASKS_CONCURRENCY)
+
+        async def read_task_runs(execution: dict) -> dict | None:
+            if "taskRunList" in execution:
+                return execution
+            async with semaphore:
+                try:
+                    r = await client.get(f"/executions/{execution['id']}")
+                    if r.status_code == 200:
+                        return r.json()
+                    logger.warning(
+                        "GET /executions/%s answered %s", execution["id"], r.status_code
+                    )
+                except (httpx.HTTPError, ValueError) as e:
+                    logger.warning("Execution %s could not be read: %s", execution["id"], e)
+                return None
+
+        full = await asyncio.gather(*(read_task_runs(e) for _, e in failed))
+        unread = []
+        for (summary, execution), detail in zip(failed, full):
+            if detail is None:
+                unread.append(execution["id"])
+            else:
+                summary["failedTasks"] = _failed_task_ids(detail)
+
+        response: dict[str, Any] = {
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "has_more": page * limit < total,
+            "results": results,
+        }
+        if unread:
+            response["warning"] = (
+                "failedTasks could not be read for executions "
+                f"{', '.join(unread)}; use manage_executions with action 'get' on them."
+            )
+        return response
