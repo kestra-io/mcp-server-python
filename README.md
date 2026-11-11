@@ -156,6 +156,7 @@ Two differences between the majors remain visible in the tool output:
 - 🔁 replay
 - ♻️ restart
 - ⏸️ resume
+- ✅ validate
 
 **Note:** The `ee` tool group contains Enterprise Edition specific functionality and is only available in EE/Cloud editions. For OSS users, you can disable EE tools by adding `KESTRA_MCP_DISABLED_TOOLS=ee` to your `.env` file.
 

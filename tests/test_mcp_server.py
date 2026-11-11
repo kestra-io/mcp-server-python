@@ -47,6 +47,9 @@ async def test_list_tools(kestra_client):
         "delete_execution_logs",
         "delete_flow_logs",
         "follow_execution_logs",
+        # Validation tools
+        "validate_flow",
+        "validate_namespace_files",
     }
 
     # EE-specific tools
