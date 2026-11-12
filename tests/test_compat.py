@@ -264,6 +264,63 @@ async def test_empty_values_are_dropped_rather_than_sent_as_blanks():
     assert await compat.executions_search_params(v1(), namespace="", flow_id=None) == {}
 
 
+# ─── search_executions: one `filters` dialect for both majors ────────────────
+
+
+def test_execution_filters_send_several_states_as_one_comma_joined_in():
+    # Repeating `filters[state][IN]` matches nothing on 1.0, 1.3 and 2.0.
+    assert compat.executions_filter_params(states=["FAILED", "KILLED"]) == {
+        "filters[state][IN]": "FAILED,KILLED"
+    }
+    assert compat.executions_filter_params(states=["FAILED"]) == {
+        "filters[state][IN]": "FAILED"
+    }
+    assert compat.executions_filter_params(states=[]) == {}
+    assert compat.executions_filter_params(states=None) == {}
+
+
+def test_execution_filters_match_the_namespace_exactly_unless_children_are_asked_for():
+    assert compat.executions_filter_params(namespace="company") == {
+        "filters[namespace][EQUALS]": "company"
+    }
+    assert compat.executions_filter_params(
+        namespace="company", include_child_namespaces=True
+    ) == {"filters[namespace][PREFIX]": "company"}
+    # Without a namespace, include_child_namespaces adds nothing.
+    assert compat.executions_filter_params(include_child_namespaces=True) == {}
+
+
+def test_execution_filters_never_emit_a_flat_parameter():
+    """A 1.x server that receives any `filters` key ignores the flat ones, so a
+    single flat key would silently drop its condition there."""
+    params = compat.executions_filter_params(
+        states=["FAILED"],
+        namespace="n",
+        flow_id="f",
+        labels={"env": "prod"},
+        query="q",
+        start_date="2026-01-01T00:00:00Z",
+        end_date="2026-02-01T00:00:00Z",
+        page=2,
+        size=25,
+        sort="state.startDate:desc",
+    )
+    assert params == {
+        "page": 2,
+        "size": 25,
+        "sort": "state.startDate:desc",
+        "filters[state][IN]": "FAILED",
+        "filters[namespace][EQUALS]": "n",
+        "filters[flowId][EQUALS]": "f",
+        "filters[q][EQUALS]": "q",
+        "filters[startDate][GREATER_THAN_OR_EQUAL_TO]": "2026-01-01T00:00:00Z",
+        "filters[endDate][LESS_THAN_OR_EQUAL_TO]": "2026-02-01T00:00:00Z",
+        "filters[labels][EQUALS][env]": "prod",
+    }
+    paging = {"page", "size", "sort"}
+    assert {k for k in params if not k.startswith("filters[")} == paging
+
+
 # ─── Response shapes ─────────────────────────────────────────────────────────
 
 
