@@ -15,6 +15,7 @@ from tools.namespace import register_namespace_tools
 from tools.resume import register_resume_tools
 from tools.replay import register_replay_tools
 from tools.restart import register_restart_tools
+from tools.validate import register_validate_tools
 
 load_dotenv()
 
@@ -99,6 +100,8 @@ if "restart" not in DISABLED_TOOLS:
     register_restart_tools(mcp, client)
 if "resume" not in DISABLED_TOOLS:
     register_resume_tools(mcp, client)
+if "validate" not in DISABLED_TOOLS:
+    register_validate_tools(mcp, client)
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")
