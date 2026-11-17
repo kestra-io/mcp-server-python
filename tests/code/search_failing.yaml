@@ -1,0 +1,10 @@
+id: search_failing
+namespace: company.team.search.child
+
+tasks:
+  - id: start
+    type: io.kestra.plugin.core.log.Log
+    message: About to fail
+
+  - id: boom
+    type: io.kestra.plugin.core.execution.Fail

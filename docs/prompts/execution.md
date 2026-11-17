@@ -2,6 +2,11 @@ List executions for the flow hello-world in tutorial namespace
 List two recent executions that started within the last 15 minutes for the flow hello-world in tutorial namespace
 List latest execution of that flow
 
+Show the ten most recent failed executions from the last day
+Which executions failed or were killed in the company namespace and its child namespaces this week?
+List failed executions of the flow hello-world in the tutorial namespace labelled env:prod, and the tasks that failed
+Show the next page of those results
+
 Get an execution info for 206uqkDGZBtlsCe71PW8ZL
 Delete the execution 76HhM2GfeOVP4l7hur2kQP
 Change the execution status to INVALID for 206uqkDGZBtlsCe71PW8ZL

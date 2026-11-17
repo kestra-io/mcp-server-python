@@ -21,6 +21,7 @@ async def test_list_tools(kestra_client):
         "execute_flow",
         "add_execution_labels",
         "list_executions",
+        "search_executions",
         "namespace_file_action",
         "namespace_directory_action",
         "search_flows",

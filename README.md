@@ -159,6 +159,8 @@ Two differences between the majors remain visible in the tool output:
 
 **Note:** The `ee` tool group contains Enterprise Edition specific functionality and is only available in EE/Cloud editions. For OSS users, you can disable EE tools by adding `KESTRA_MCP_DISABLED_TOOLS=ee` to your `.env` file.
 
+To find executions, prefer `search_executions` over `list_executions` on busy instances. It filters by state, namespace (optionally with child namespaces), flow, labels, free text and time window on the Kestra server, and returns one page per call with `total` and `has_more`, plus `failedTasks` for failed executions. `list_executions` reads every execution of a namespace in the window, which can be too large for a busy namespace.
+
 Optionally, you can include `KESTRA_MCP_DISABLED_TOOLS` in your `.env` file listing the tools that you prefer to disable. For example, if you want to disable Namespace Files tools, add this to your `.env` file:
 
 ```dotenv
